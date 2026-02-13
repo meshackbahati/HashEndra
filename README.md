@@ -71,7 +71,7 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 ### One-Liner (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh |sudo bash
+curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
 ```
 
 This script automatically detects your OS, installs Rust/Cargo if needed, builds the project, and copies the binary to `/usr/local/bin/`.
