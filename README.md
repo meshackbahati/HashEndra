@@ -1,4 +1,4 @@
-# HashEndra v2.0
+# HashEndra 
 
 <p align="center">
   <img src="assets/logo.png" width="400" alt="HashEndra Logo">
@@ -71,7 +71,7 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 ### One-Liner (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh |sudo bash
 ```
 
 This script automatically detects your OS, installs Rust/Cargo if needed, builds the project, and copies the binary to `/usr/local/bin/`.
