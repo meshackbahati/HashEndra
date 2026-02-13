@@ -62,6 +62,7 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 ### Forensic Mode
 - **Memory-Mapped Binary Scanning** — scans disk images, RAM dumps, and binary files for hidden hashes and encoded strings using zero-copy `mmap`.
 - **Directory Recursion** — walks entire directory trees to locate evidence across filesystems.
+- **Magic Byte Detection & File Carving** — identifies embedded file signatures (ZIP, PDF, PNG, ELF, etc.) within other files and automatically extracts them to dedicated folders.
 
 ---
 
@@ -375,9 +376,9 @@ The engine tests all 256 possible single-byte keys and ranks results by printabl
 
 ---
 
-### 9. Forensic Binary Scanning
+### 9. Forensic Binary Scanning & File Carving
 
-Scan binary files (disk images, memory dumps, firmware) for hidden hashes and encoded strings:
+Scan binary files (disk images, memory dumps, firmware) for hidden hashes, encoded strings, and embedded files:
 
 ```bash
 # Scan a single file
@@ -388,10 +389,10 @@ hashendra forensic /path/to/evidence/
 ```
 
 **How it works:**
-- Uses memory-mapped I/O (`mmap`) for zero-copy, high-performance scanning.
-- Walks all files in directories recursively via `walkdir`.
-- Applies the full 2,000+ signature library against binary content.
-- Reports each finding with byte offset, matched signature, and confidence.
+- **Recursive Scanning**: Walks through all subdirectories to analyze every file.
+- **Strings & Hashes**: Identifies readable strings (URLs, IPs, Emails, Hashes) using regex and entropy.
+- **Embedded File Detection**: Scans for magic bytes of common file formats (ZIP, RAR, 7z, PDF, ELF, etc.).
+- **Automatic Extraction**: When a hidden file is detected, it is extracted to a dedicated folder `extracted_<filename>/`.
 
 ---
 
@@ -412,11 +413,17 @@ hashendra workshop "SGVsbG8gV29ybGQ="
 | Command | Description |
 |---------|-------------|
 | `/set <text>` | Set the current working text |
+| `/analyze`, `/detect` | Run full forensic analysis on current text |
 | `/base64` | Decode current text as Base64 |
+| `/base32` | Decode current text as Base32 |
+| `/base58` | Decode current text as Base58 |
 | `/hex` | Decode current text as Hex |
+| `/url` | Decode current text as URL-encoding |
 | `/rot13` | Apply ROT13 to current text |
 | `/xor <key>` | XOR current text with a string key |
 | `/deep` | Run the deep auto-unwrapper on current text |
+| `/history` | Show the history of changes |
+| `/undo` | Revert to the previous text state |
 | `/status` | Show current working text |
 | `/help` | Show all available commands |
 | `/exit` | Exit the workshop |
@@ -431,8 +438,8 @@ hashendra> /rot13
   [OK] Applied ROT13: Uryyb Jbeyq
 hashendra> /status
   Current: Uryyb Jbeyq
-hashendra> /deep
-  [LAYER 1] Detected: Caesar/ROT -> Hello World
+hashendra> /undo
+  [OK] Undone. Current: Hello World
 hashendra> /exit
 ```
 

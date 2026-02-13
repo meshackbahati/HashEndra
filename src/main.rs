@@ -70,7 +70,7 @@ fn main() {
     let cli = Cli::parse();
     let context = cli.context.clone();
 
-    print_banner();
+    // print_banner(); // specific commands will handle banner if needed
 
     if let Some(input) = cli.input {
         if cli.deep_decrypt {
@@ -93,20 +93,40 @@ fn main() {
                 safe_println!("{}", "No updates available. You are running the latest version (v0.1.0).".green());
             }
             Commands::Forensic { path } => {
-                safe_println!("{}", format!("Running forensic scan on {}...", path).cyan());
-                let mut manager = hashendra::utils::io_manager::FileManager::new();
-                if let Err(e) = manager.map_file(&path) {
-                    safe_println!("{}", format!("Error mapping file: {}", e).red());
+                let path = std::path::Path::new(&path);
+                if path.is_dir() {
+                    safe_println!("{}", format!("Running recursive forensic scan on directory: {}...", path.display()).cyan());
+                    let walker = walkdir::WalkDir::new(path).into_iter();
+                    for entry in walker.filter_map(|e| e.ok()) {
+                        let path = entry.path();
+                        if path.is_file() {
+                             let mut manager = hashendra::utils::io_manager::FileManager::new();
+                             if let Err(_) = manager.map_file(path.to_str().unwrap_or_default()) {
+                                 // safe_println!("{}", format!("Skipping {}: {}", path.display(), e).yellow());
+                             } else {
+                                 safe_println!("{}", format!("Scanning: {}", path.display()).blue());
+                                 manager.scan_binary();
+                             }
+                        }
+                    }
                 } else {
-                    manager.scan_binary();
+                    safe_println!("{}", format!("Running forensic scan on {}...", path.display()).cyan());
+                    let mut manager = hashendra::utils::io_manager::FileManager::new();
+                    if let Err(e) = manager.map_file(path.to_str().unwrap_or_default()) {
+                        safe_println!("{}", format!("Error mapping file: {}", e).red());
+                    } else {
+                        manager.scan_binary();
+                    }
                 }
             }
             Commands::Workshop { input } => {
+                print_banner();
                 run_workshop(input);
             }
         }
     } else {
         // Read from stdin
+        print_banner();
         let stdin = io::stdin();
         let inputs: Vec<String> = stdin.lock().lines().filter_map(|l| l.ok()).collect();
         
@@ -123,69 +143,15 @@ fn main() {
 
 fn print_banner() {
     let eagle = r#"
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@@%%%@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%@@@@@@@%%%%@@@@@%%%%@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%%%%%@@@@@@@@%%%@@@@@%%@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@@@@@@@@@@@@@%%%@@@@@@@@@@@@%%@%%%%%@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%*+*#%%@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@%@@%@@%@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%####%@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@%%@@%@@%@%@%@%@@@@%@%@%@@@@@@@%@@@@@%%@@@%%@@%@%%%%%%%%@
-@@@@@@@@@@@@@@%%@@@@@@@@@@@@@@@@%%%@%@@@@%@@%%%@%@@%@%@%@@%@@@%@%@%@@@%%%%@%#%@%%%%%%%%@@%@%%%%%%@@@
-@@@@@@@@@@@@@@#=+*#%%%@@@@@%@@@@%%%@%%%@%%@@%%%%@@@%@#@%@%%%%@%@%%%@@@@@%@@#%@%%%#*+=#%@@@@@@@@@@@@%
-@@@@@@@@@@@@@@@#*#*+-=*%%%%%%@%@%%%@%%%%%%@@%%%%%%%%@%%%%%%%%@%@%%%@@@%@%%%%%*=-=*#**@@@@@@@@@@@@@%#
-@@@@@@@@@@@@@@%@%+**++*+--*##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#*#--=*++*++#@%%@@@@@@@@@%##@
-@@@@@@@@@@@@@@*******=*++*==-=-=+**##%%%%%%%%%%%%#####%%%%%%%%%%##*+=---==*++*=******+@@@@@@@@%###%@
-@@@@@@@@@@@@@@@*#%###**++###==+=--::=*#%%%%%%#:--:...:+##%%%%#*=::--=+=-#*#++**##*%#*@@@@@%%%#*###@@
-@@@@@@@@@@@@@@@@%**#%#***#*+=+*+-===-:+#%%%##*--=--.:=:.-*###+:-===-+*=-=*#***###**%@@@@@%%@@%%%#%@@
-@@@@@@@@@@@@@@@#+++++*+++*#*#**+++==+=:#%%%%%+==+++++==+=+%%#-=++=++++*#***+++++++++*@@@@@@@@%@@%%@@
-@@@@@@@@@@@@@@@@#=#+=+++++=*#**+++*=*+-#%%%%#=+++=#*#*%%%%%%#-+*-*+++*+#*=+++=+=+#=*@@@@@@@@@@@@%%%@
-@@@@@@@@@@@@@@@@@@#++++*#+**=+***##+++*-#%%%*+++=**+*=%%%%%#-***+#****+-**+#*++++#@@@@@@@@@@%@@%%%%%
-@@@@@@@@@@@@@@@@@@*++++++++++*+#+*#**+***++**=+==++=++*#*++*#*+**#*+#+*++++++++++*@@@@@@@@@%%@%%@@%%
-@@@@@@@@@@@@@@@@@@@#+#******#*##=**+###+###+==+#*+++**=++%##+###=**=##*#******#+*@@@@@@@@@@%%%%@@@@@
-@@@@@@@@@@@@@@@@@@@@@%#******#++#**####%##%-++*#+**+##*+=###%####**#++#*#****#%@@@@@@@@@@@@@%@@@@@@@
-@@@@@@@@@@@@@@@@%@@@@@%+=***###*+*#***####%=***=-::-=***+%%###***#*+*###***=+%@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@#%@%##%*+**#*%#%%%##%+%#+==-=++*#%*%##%%##%*#**+*%##%%%#@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@%@%@@@@**%%@%#+*##**++####%%%+%##+*****#%%*%%%####++**#**+*%@@%#+@@%@@@@@%@@@@@@@@@@@%
-@@@@@@@@@@@@@@%@%@@@%-#%%%%#%@@#++*****#*#%####%*##*%###*@#*#*****++#@@@#%####-%@%@@@@@@@%@@@@@@@@@@
-@@@@@@@@@@@@@@@@%@@%*=%%##%*@@@@%%%+=+%+*#@###+%###*#+###@#*=%+=+%%%@@@@*##%##=*%@@@%%@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@%@%@%%++##%%#*%%@@@@@@@@%@@@+**#%##%###%##*=%@@%@@@@@@@@%@**###*+=%@@@%%@@@%@%@@@@@@@@
-@@@@@@@@@@@@@@%@@@@%=**#++**%%%@%@@@%@@@%%=#*####%%#%##*#-%%@@@@@%@%%%%%*+*+*#*-%@@@@%@@@%@@@@@@@@@@
-@@@@@@@@@@@@@@%@@@@%=+******%%%%#%%%%%%%+#=+*######%%##*+-#+%%%%%%%%%%%%*+#*##*-%@@@%%@@@%@@@@@@@@@@
-@@@@@@@@@@@@@@@@%@@%+=#%%#*+%%#%###%###-*#%+*+%+..--+%+*+%%*-#%%##%%%#%%+*####+=%@@@%%@@@%@@@@@@@@@@
-@@@@@@@@@@@@@@#@@@@@#-%#+=*=%%%%%##%#*+#*=++#+*=+-+*+#*#++=**=*##%%#%%%%+*+#%#=*@@@@%%@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@%@@@@@%-*#%#*+*%%%####*-..=*###++--=***%#%%##+:.:=**##%#%*+##%##-%@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@%@@@@@@#=%%*+#=%%@%%%##-.*-:----*-:-=--#####++#--##%%%@%%-%###*+*@@@@@@@@@@@@@@@@@@@@@
-@%@@@@@%%@@@@@@@@@@@@@*##%##%+%@%%%%%=:%--::-*:+#*#%*=##****%=+%%%%%%%+%*#%%#*@@@@@@@@@@@@@@@@@@@@@@
-@%@@@@@@@@%@@@%@@@@@@@%*%#%##%*%@%%@%+:%====+++**=#%*****##*%=+%@@@%%*#%*%#%*%@@@@@@@@@@@@@@@@@@@@@@
-@%%%@@@@@@@@@@@@@@@@@@@%+%*%%#%*%@@@@*-#++*+#*++=--=+**##%**#=+%@@@%+%#%@%%+%@@@@@@@@@@@@@@@@@@@@@@@
-@%%%@@@@%%#@@@@@@@@@@@@@%*%%@%#%%#%@@#==*+**+-::..---=+*##**=:+%@%##%#%%%%*%@@@@@@@@@@@@@@@@@@@@@@@@
-@@%%%%@%@%%@@@@@@@@@@@@@@@##%@%#%%#*%%-:****=:-=+%%*++++##**::#%*#%##%%%##@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@%%%%%@@%@@@@@@@%@@@@@@@@@%*%%@@%#%%##++###+==+=##+*+++###+-*%%%##%%%%*#@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@%%%%@@@@@@@@@@@@@@@@@@@@@@##%%%%%%%@#+*#%*++***#*#***###+*@%#####%##@@@@@@@%@@@@@@@@@@@@@@@@@@@@@
-@@@@%@@%@@@@@@@@@@@@@@@%@@@@@@@%#%%@%%%@#**%#*++=--++**#%**#@@%%@%#*#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@#%@%@@@@%%%@@@%%@@%%%@@@@@@@@%**%%%@@%#*%%%%#*#%%%%%*#%@@%@%**%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@%#%%%@@@@%%%%%####%%@@@@@@@@@@@@@%##%%@@###%#*+*%%%###@@@%##%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@%%%%%@@@@@@@%%%%@%@@@@@@@@@@%@@@@@@@@@@%%%%#++*##*###%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@%%%%@@@@@@@@@%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#-.+*#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@%%@@@@@@@@@@@%@@@%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@%%%%%%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@%#**%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@%@@%%#%@@@@@@@@@@@@@@@@@@%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    "#;
+   / \
+  / _ \
+ | (_) |
+  \___/   HashEndra v2.0
+"#;
 
     safe_println!("{}", eagle.cyan());
     safe_println!("{}", "------------------------------------------------------------------".cyan());
-    safe_println!("{}", "                HashEndra v2.0 - Advanced Cipher Suite            ".cyan());
-    safe_println!("{}", "          The Universal Forensic Decryption & Hashing Engine      ".cyan());
-    safe_println!("{}", "                 Author: Meshack Bahati                           ".cyan());
-    safe_println!("{}", "          GitHub: https://github.com/meshackbahati/HashEndra      ".cyan());
+    safe_println!("{}", "          Universal Forensic Decryption & Hashing Engine          ".cyan());
     safe_println!("{}", "------------------------------------------------------------------".cyan());
 }
 fn handle_deep_decrypt(input: &str) {
@@ -461,8 +427,9 @@ fn analyze_file(path: &str, json: bool) {
 
 fn run_workshop(initial_input: Option<String>) {
     let mut current = initial_input.unwrap_or_default();
-    safe_println!("{}", "------------------------------------------------------------------".cyan());
-    safe_println!("{}", "                HashEndra Interactive Workshop v2.0               ".cyan());
+    let mut history: Vec<String> = vec![current.clone()];
+    
+    // Banner already printed by caller
     safe_println!("{}", "      Type /help for commands, /exit to quit, or raw text to set.  ".cyan());
     safe_println!("{}", "------------------------------------------------------------------".cyan());
 
@@ -482,25 +449,37 @@ fn run_workshop(initial_input: Option<String>) {
             match parts[0] {
                 "/help" => {
                     safe_println!("  /set <text>      - Set current working text");
+                    safe_println!("  /analyze         - Run detection on current text");
                     safe_println!("  /base64          - Decode current as Base64");
                     safe_println!("  /hex             - Decode current as Hex");
+                    safe_println!("  /base32          - Decode current as Base32");
+                    safe_println!("  /base58          - Decode current as Base58");
+                    safe_println!("  /url             - Decode current as URL");
                     safe_println!("  /rot13           - Apply ROT13 to current");
                     safe_println!("  /xor <key>       - XOR current with key (string)");
                     safe_println!("  /deep            - Run deep auto-unwrapper");
                     safe_println!("  /status          - Show current state");
+                    safe_println!("  /history         - Show history stack");
+                    safe_println!("  /undo            - Revert to previous state");
                     safe_println!("  /exit            - Exit workshop");
                 }
                 "/set" => {
                     if parts.len() > 1 {
                         current = parts[1..].join(" ");
+                        history.push(current.clone());
                         safe_println!("  [OK] Current text set.");
                     }
+                }
+                "/analyze" | "/detect" => {
+                    safe_println!("  [ANALYSIS] scanning: {}", current.yellow());
+                    analyze_single_input(&current, false, false, "generic");
                 }
                 "/base64" => {
                     use hashendra::core::scanner::decode_base64;
                     if let Some(dec) = decode_base64(&current) {
                         if let Ok(s) = String::from_utf8(dec) {
                             current = s;
+                            history.push(current.clone());
                             safe_println!("  [OK] Decoded: {}", current.green());
                         } else {
                             safe_println!("  [FAIL] Result is not valid UTF-8.");
@@ -514,6 +493,7 @@ fn run_workshop(initial_input: Option<String>) {
                     if let Some(dec) = decode_hex(&current) {
                         if let Ok(s) = String::from_utf8(dec) {
                             current = s;
+                            history.push(current.clone());
                             safe_println!("  [OK] Decoded: {}", current.green());
                         } else {
                             safe_println!("  [FAIL] Result is not valid UTF-8.");
@@ -521,6 +501,44 @@ fn run_workshop(initial_input: Option<String>) {
                     } else {
                         safe_println!("  [FAIL] Not valid Hex.");
                     }
+                }
+                "/base32" => {
+                     use hashendra::core::scanner::decode_base32;
+                     if let Some(dec) = decode_base32(&current) {
+                         if let Ok(s) = String::from_utf8(dec) {
+                             current = s;
+                             history.push(current.clone());
+                             safe_println!("  [OK] Decoded: {}", current.green());
+                         } else {
+                             safe_println!("  [FAIL] Result is not valid UTF-8.");
+                         }
+                     } else {
+                         safe_println!("  [FAIL] Not valid Base32.");
+                     }
+                }
+                "/base58" => {
+                     use hashendra::core::scanner::decode_base58;
+                     if let Some(dec) = decode_base58(&current) {
+                         if let Ok(s) = String::from_utf8(dec) {
+                             current = s;
+                             history.push(current.clone());
+                             safe_println!("  [OK] Decoded: {}", current.green());
+                         } else {
+                             safe_println!("  [FAIL] Result is not valid UTF-8.");
+                         }
+                     } else {
+                         safe_println!("  [FAIL] Not valid Base58.");
+                     }
+                }
+                "/url" => {
+                     use hashendra::core::scanner::decode_url;
+                     if let Some(s) = decode_url(&current) {
+                         current = s;
+                         history.push(current.clone());
+                         safe_println!("  [OK] Decoded: {}", current.green());
+                     } else {
+                         safe_println!("  [FAIL] Not valid URL encoding.");
+                     }
                 }
                 "/rot13" => {
                      current = current.chars().map(|c| {
@@ -531,6 +549,7 @@ fn run_workshop(initial_input: Option<String>) {
                             c
                         }
                     }).collect();
+                    history.push(current.clone());
                     safe_println!("  [OK] Applied ROT13: {}", current.green());
                 }
                 "/xor" => {
@@ -539,6 +558,7 @@ fn run_workshop(initial_input: Option<String>) {
                         let current_bytes = current.as_bytes();
                         let xored: Vec<u8> = current_bytes.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect();
                         current = String::from_utf8_lossy(&xored).to_string();
+                        history.push(current.clone());
                         safe_println!("  [OK] Applied XOR: {}", current.green());
                     } else {
                         safe_println!("  [FAIL] Usage: /xor <key>");
@@ -549,6 +569,21 @@ fn run_workshop(initial_input: Option<String>) {
                 }
                 "/status" => {
                     safe_println!("  Current: {}", current.yellow());
+                    safe_println!("  History depth: {}", history.len());
+                }
+                "/history" => {
+                    for (i, h) in history.iter().enumerate() {
+                        safe_println!("  {}: {}", i, h);
+                    }
+                }
+                "/undo" => {
+                    if history.len() > 1 {
+                        history.pop();
+                        current = history.last().unwrap().clone();
+                        safe_println!("  [OK] Undone. Current: {}", current.yellow());
+                    } else {
+                        safe_println!("  [FAIL] Nothing to undo.");
+                    }
                 }
                  _ => {
                     safe_println!("  [FAIL] Unknown command. Type /help.");
@@ -556,6 +591,7 @@ fn run_workshop(initial_input: Option<String>) {
             }
         } else {
             current = input.to_string();
+            history.push(current.clone());
             safe_println!("  [OK] Current text set to input.");
         }
     }

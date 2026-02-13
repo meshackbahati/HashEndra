@@ -1,6 +1,7 @@
 use std::fs::File;
 use memmap2::Mmap;
 use std::io::{self, Write, Result};
+use std::path::PathBuf;
 use colored::*;
 use crate::core::patterns::{scan_input, ScanningContext};
 
@@ -17,14 +18,16 @@ macro_rules! safe_println {
 
 pub struct FileManager {
     mmap: Option<Mmap>,
+    path: Option<PathBuf>,
 }
 
 impl FileManager {
     pub fn new() -> Self {
-        Self { mmap: None }
+        Self { mmap: None, path: None }
     }
 
     pub fn map_file(&mut self, path: &str) -> Result<()> {
+        self.path = Some(PathBuf::from(path));
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
         self.mmap = Some(mmap);
@@ -39,15 +42,58 @@ impl FileManager {
         if let Some(data) = self.get_data() {
             safe_println!("[SCAN] Starting high-speed forensic scan ({} bytes)...", data.len());
             
+            // 1. Signature Scanning
+            use crate::detectors::stego::scan_for_signatures;
+            let file_matches = scan_for_signatures(data);
+            
+            if !file_matches.is_empty() {
+                safe_println!("\n[FORENSIC] Detected embedded file signatures:");
+                
+                // Prepare output directory if we need to extract
+                let output_dir = if let Some(p) = &self.path {
+                    let file_stem = p.file_stem().unwrap_or_default().to_string_lossy();
+                    format!("extracted_{}", file_stem)
+                } else {
+                    "extracted_files".to_string()
+                };
+
+                for (idx, m) in file_matches.iter().enumerate() {
+                    let location = if m.offset == 0 { "Start of file".to_string() } else { format!("Offset 0x{:X}", m.offset) };
+                    safe_println!("  - [{}] {} matches {} ({})", idx, location.yellow(), m.signature.name.green(), m.signature.description);
+                    
+                    // If it's NOT at the start (or if it is but we are scanning a blob/stream), suggest extraction
+                    if m.offset > 0 || file_matches.len() > 1 {
+                        // Check if we should extract
+                        let ext = m.signature.extension;
+                        
+                        // Ensure directory exists
+                        if std::fs::create_dir_all(&output_dir).is_ok() {
+                            let filename = format!("{}/extracted_{:08x}.{}", output_dir, m.offset, ext);
+                            
+                            // Limit extraction size? 
+                            // If we don't know the end, we extract till end of file
+                            let content = &data[m.offset..];
+                            if let Ok(_) = std::fs::write(&filename, content) {
+                                 safe_println!("    [EXTRACTED] Saved to {}", filename.cyan());
+                            } else {
+                                 safe_println!("    [FAIL] Could not write extraction");
+                            }
+                        } else {
+                             safe_println!("    [FAIL] Could not create output directory {}", output_dir);
+                        }
+                    }
+                }
+            }
+
             let mut start = 0;
+            // ... existing string scan logic
             for i in 0..data.len() {
                 let byte = data[i];
                 if !byte.is_ascii_graphic() && !byte.is_ascii_whitespace() {
                     let len = i - start;
                     if len >= 8 {
                         if let Ok(current_string) = std::str::from_utf8(&data[start..i]) {
-                            let raw_blob = current_string.trim();
-                            
+                             let raw_blob = current_string.trim();
                             // Scan the whole blob first
                             let results = scan_input(raw_blob, ScanningContext::Filesystem);
                             if !results.is_empty() && results[0].confidence > 0.8 {
