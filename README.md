@@ -53,7 +53,7 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 - **Deep Parameter Extraction** — parses BCrypt, Argon2, Scrypt, PBKDF2, and JWT for metadata (cost, salt, memory, header/payload).
 - **Security Audit** — flags every detection against NIST SP 800-131A, PCI DSS 4.0, and GDPR compliance standards.
 
-### Advanced Cipher Suite (v2.0)
+### Advanced Cipher Suite
 - **10 Classical Cipher Crackers** — Caesar, Atbash, Affine, Baconian, Vigenere, Rail Fence, Columnar Transposition, Simple Substitution, Playfair, and Bifid.
 - **Statistical Cryptanalysis Core** — Index of Coincidence, Chi-Squared analysis, quadgram scoring, Hamming distance, and multi-byte XOR key estimation.
 - **Layered Decoding Engine** — recursive auto-unwrapper that peels back nested Hex, Base64, Base32, URL, Caesar, Vigenere, Affine, Atbash, Rail Fence, and XOR layers with cycle detection.
@@ -634,7 +634,57 @@ The engine uses multiple termination heuristics:
 When you specify `--context network`, the engine boosts confidence for signatures that are commonly found in network traffic (e.g., NTLM, Kerberos tickets) and reduces confidence for signatures more common in other contexts. This reduces false positives for the specific analysis scenario.
 
 ### Can I add custom signatures?
-Yes. Create a file at `~/.hashendra/signatures.json` with an array of signature objects. HashEndra automatically loads these at startup. See `src/core/patterns.rs` for the `Signature` struct format.
+Yes. Create a file at `~/.hashendra/signatures.json` with an array of signature objects. HashEndra automatically loads these at startup.
+
+**Signature Structure:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes | Unique identifier (e.g., `"My Custom Hash"`) |
+| `description` | `string` | Yes | Human-readable description |
+| `pattern` | `string` | Yes | Regex pattern to match against input |
+| `detection_type` | `string` | Yes | One of: `"Hash"`, `"Encoding"`, `"Cipher"`, `"Stego"` |
+| `confidence_weight` | `number` | Yes | Base confidence (0.0 – 1.0) |
+| `common_name` | `string\|null` | No | Friendly name (e.g., `"MD5"`) |
+| `hashcat_mode` | `number\|null` | No | Hashcat mode number for cracking |
+| `john_format` | `string\|null` | No | John the Ripper format string |
+| `security_rating` | `string\|null` | No | One of: `"Secure"`, `"Weak"`, `"Broken"`, `"Insecure"` |
+| `compliance_refs` | `string[]` | Yes | Compliance standards (e.g., `["PCI DSS 4.0"]`) |
+| `parameters` | `string[]` | Yes | Named capture groups in the regex pattern |
+
+**Example `~/.hashendra/signatures.json`:**
+```json
+[
+  {
+    "name": "Custom API Token",
+    "description": "My internal API token format",
+    "pattern": "^MYAPP-[A-Za-z0-9]{32}$",
+    "detection_type": "Encoding",
+    "confidence_weight": 0.95,
+    "common_name": "MyApp Token",
+    "hashcat_mode": null,
+    "john_format": null,
+    "security_rating": "Secure",
+    "compliance_refs": [],
+    "parameters": []
+  },
+  {
+    "name": "Internal Hash v2",
+    "description": "Custom salted hash used by internal systems",
+    "pattern": "^\\$INT\\$(?P<salt>[a-f0-9]{16})\\$(?P<hash>[a-f0-9]{64})$",
+    "detection_type": "Hash",
+    "confidence_weight": 0.90,
+    "common_name": "Internal Salted SHA-256",
+    "hashcat_mode": null,
+    "john_format": null,
+    "security_rating": "Weak",
+    "compliance_refs": ["NIST SP 800-131A"],
+    "parameters": ["salt", "hash"]
+  }
+]
+```
+
+Named capture groups in `pattern` (e.g., `(?P<salt>...)`) are automatically extracted and displayed as parameters in the output.
 
 ---
 
