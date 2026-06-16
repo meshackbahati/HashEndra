@@ -1,4 +1,4 @@
-use crate::core::patterns::{Signature, DetectionType, SecurityRating};
+use crate::core::patterns::{DetectionType, SecurityRating, Signature};
 
 pub fn get_hash_signatures() -> Vec<Signature> {
     vec![

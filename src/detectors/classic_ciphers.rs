@@ -8,15 +8,19 @@ pub fn caesar_auto_crack(text: &str) -> (u8, String, f32) {
     let mut best_score = f32::MAX;
 
     for shift in 0..26 {
-        let decoded: String = text.chars().map(|c| {
-            if c.is_ascii_alphabetic() {
-                let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
-                let rotated = (((c as u8 - base) as i16 + (26 - shift) as i16) % 26) as u8 + base;
-                rotated as char
-            } else {
-                c
-            }
-        }).collect();
+        let decoded: String = text
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphabetic() {
+                    let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
+                    let rotated =
+                        (((c as u8 - base) as i16 + (26 - shift) as i16) % 26) as u8 + base;
+                    rotated as char
+                } else {
+                    c
+                }
+            })
+            .collect();
 
         let score = chi_squared_score(&decoded);
         if score < best_score {
@@ -31,15 +35,17 @@ pub fn caesar_auto_crack(text: &str) -> (u8, String, f32) {
 
 /// Decodes an Atbash cipher (alphabet reversal).
 pub fn atbash_decode(text: &str) -> String {
-    text.chars().map(|c| {
-        if c.is_ascii_uppercase() {
-            (b'Z' - (c as u8 - b'A')) as char
-        } else if c.is_ascii_lowercase() {
-            (b'z' - (c as u8 - b'a')) as char
-        } else {
-            c
-        }
-    }).collect()
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                (b'Z' - (c as u8 - b'A')) as char
+            } else if c.is_ascii_lowercase() {
+                (b'z' - (c as u8 - b'a')) as char
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// Automatically cracks an Affine cipher (ax + b mod 26).
@@ -62,17 +68,20 @@ pub fn affine_auto_crack(text: &str) -> (u8, u8, String, f32) {
         }
 
         for b in 0..26 {
-            let decoded: String = text.chars().map(|c| {
-                if c.is_ascii_alphabetic() {
-                    let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
-                    let x = c as u8 - base;
-                    // Formula: D(y) = a_inv * (y - b) mod 26
-                    let res = (a_inv * (x as i32 - b as i32 + 26)) % 26;
-                    (res as u8 + base) as char
-                } else {
-                    c
-                }
-            }).collect();
+            let decoded: String = text
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphabetic() {
+                        let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
+                        let x = c as u8 - base;
+                        // Formula: D(y) = a_inv * (y - b) mod 26
+                        let res = (a_inv * (x as i32 - b as i32 + 26)) % 26;
+                        (res as u8 + base) as char
+                    } else {
+                        c
+                    }
+                })
+                .collect();
 
             let score = chi_squared_score(&decoded);
             if score < best_score {
@@ -90,25 +99,28 @@ pub fn affine_auto_crack(text: &str) -> (u8, u8, String, f32) {
 /// Decodes Baconian cipher (5-bit binary encoded as two types of characters).
 /// Supports the standard 24-character variant and the 26-character complete variant.
 pub fn bacon_decode(text: &str, char_a: char, char_b: char) -> Option<String> {
-    let clean: String = text.chars()
+    let clean: String = text
+        .chars()
         .map(|c| c.to_ascii_uppercase())
         .filter(|&c| c == char_a || c == char_b)
         .collect();
-    
-    if clean.len() % 5 != 0 { return None; }
+
+    if clean.len() % 5 != 0 {
+        return None;
+    }
 
     let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let mut decoded = String::new();
 
     for i in (0..clean.len()).step_by(5) {
-        let chunk = &clean[i..i+5];
+        let chunk = &clean[i..i + 5];
         let mut val = 0;
         for (idx, c) in chunk.chars().enumerate() {
             if c == char_b {
                 val |= 1 << (4 - idx);
             }
         }
-        
+
         if val < 26 {
             decoded.push(alphabet.chars().nth(val as usize)?);
         }
@@ -119,34 +131,42 @@ pub fn bacon_decode(text: &str, char_a: char, char_b: char) -> Option<String> {
 
 /// Decodes a Vigenere cipher with a given key.
 pub fn vigenere_decode(text: &str, key: &str) -> String {
-    let key: Vec<u8> = key.to_ascii_lowercase().chars()
+    let key: Vec<u8> = key
+        .to_ascii_lowercase()
+        .chars()
         .filter(|c| c.is_ascii_alphabetic())
         .map(|c| c as u8 - b'a')
         .collect();
-    
-    if key.is_empty() { return text.to_string(); }
+
+    if key.is_empty() {
+        return text.to_string();
+    }
 
     let mut key_idx = 0;
-    text.chars().map(|c| {
-        if c.is_ascii_alphabetic() {
-            let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
-            let shift = key[key_idx % key.len()];
-            key_idx += 1;
-            let val = (((c as u8 - base) as i16 + (26 - shift as i16)) % 26) as u8 + base;
-            val as char
-        } else {
-            c
-        }
-    }).collect()
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_alphabetic() {
+                let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
+                let shift = key[key_idx % key.len()];
+                key_idx += 1;
+                let val = (((c as u8 - base) as i16 + (26 - shift as i16)) % 26) as u8 + base;
+                val as char
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// Automatically cracks a Vigenere cipher by Estimating the period (IoC)
 /// and then cracking each column as a Caesar cipher.
 pub fn vigenere_auto_crack(text: &str) -> (String, String, f32) {
-    use crate::core::cryptanalysis::{estimate_vigenere_period, chi_squared_score};
+    use crate::core::cryptanalysis::{chi_squared_score, estimate_vigenere_period};
 
     let periods = estimate_vigenere_period(text, 20);
-    if periods.is_empty() { return ("".to_string(), text.to_string(), 1000.0); }
+    if periods.is_empty() {
+        return ("".to_string(), text.to_string(), 1000.0);
+    }
 
     let mut best_key = String::new();
     let mut best_text = text.to_string();
@@ -157,7 +177,7 @@ pub fn vigenere_auto_crack(text: &str) -> (String, String, f32) {
         let mut key = String::new();
         let chars: Vec<char> = text.chars().filter(|c| c.is_ascii_alphabetic()).collect();
         let column_len = (chars.len() as f32 / p as f32).ceil() as usize;
-        
+
         for i in 0..p {
             let mut column = String::with_capacity(column_len);
             for j in (i..chars.len()).step_by(p) {
@@ -181,8 +201,10 @@ pub fn vigenere_auto_crack(text: &str) -> (String, String, f32) {
 
 /// Decodes a Rail Fence cipher with a given number of rails.
 pub fn rail_fence_decode(text: &str, rails: usize) -> String {
-    if rails <= 1 { return text.to_string(); }
-    
+    if rails <= 1 {
+        return text.to_string();
+    }
+
     let mut fence = vec![vec!['\0'; text.len()]; rails];
     let mut rail = 0;
     let mut direction = 1;
@@ -190,8 +212,11 @@ pub fn rail_fence_decode(text: &str, rails: usize) -> String {
     // Mark the rail positions
     for i in 0..text.len() {
         fence[rail][i] = '*';
-        if rail == 0 { direction = 1; }
-        else if rail == rails - 1 { direction = -1; }
+        if rail == 0 {
+            direction = 1;
+        } else if rail == rails - 1 {
+            direction = -1;
+        }
         rail = (rail as i32 + direction) as usize;
     }
 
@@ -213,8 +238,11 @@ pub fn rail_fence_decode(text: &str, rails: usize) -> String {
     direction = 1;
     for i in 0..text.len() {
         result.push(fence[rail][i]);
-        if rail == 0 { direction = 1; }
-        else if rail == rails - 1 { direction = -1; }
+        if rail == 0 {
+            direction = 1;
+        } else if rail == rails - 1 {
+            direction = -1;
+        }
         rail = (rail as i32 + direction) as usize;
     }
 
@@ -246,7 +274,7 @@ pub fn columnar_decode(text: &str, key: &[usize]) -> String {
     let cols = key.len();
     let rows = (text.len() as f32 / cols as f32).ceil() as usize;
     let mut grid = vec![vec![' '; cols]; rows];
-    
+
     // Fill the grid column by column according to the key
     let mut chars = text.chars();
     for &col_idx in key {
@@ -294,18 +322,24 @@ pub fn columnar_auto_crack(text: &str) -> (Vec<usize>, String, f32) {
 }
 
 /// Decodes a simple substitution cipher with a given alphabet mapping.
-pub fn simple_substitution_decode(text: &str, alphabet_map: &std::collections::HashMap<char, char>) -> String {
-    text.chars().map(|c| {
-        if c.is_ascii_uppercase() {
-            *alphabet_map.get(&c).unwrap_or(&c)
-        } else if c.is_ascii_lowercase() {
-            alphabet_map.get(&c.to_ascii_uppercase())
-                .map(|&rc| rc.to_ascii_lowercase())
-                .unwrap_or(c)
-        } else {
-            c
-        }
-    }).collect()
+pub fn simple_substitution_decode(
+    text: &str,
+    alphabet_map: &std::collections::HashMap<char, char>,
+) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                *alphabet_map.get(&c).unwrap_or(&c)
+            } else if c.is_ascii_lowercase() {
+                alphabet_map
+                    .get(&c.to_ascii_uppercase())
+                    .map(|&rc| rc.to_ascii_lowercase())
+                    .unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// Automatically cracks a simple substitution cipher using Hill Climbing.
@@ -346,7 +380,11 @@ pub fn simple_substitution_auto_crack(text: &str) -> (String, String, f32) {
         key_str.push(c);
     }
 
-    (key_str, simple_substitution_decode(text, &mapping), best_score)
+    (
+        key_str,
+        simple_substitution_decode(text, &mapping),
+        best_score,
+    )
 }
 
 /// Decodes a Playfair cipher with a given keyword and 5x5 grid (J=I).
@@ -354,7 +392,7 @@ pub fn playfair_decode(text: &str, key: &str) -> String {
     let mut grid = vec!['\0'; 25];
     let mut key_chars = Vec::new();
     let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ"; // No 'J'
-    
+
     let key = key.to_uppercase().replace('J', "I");
     for c in key.chars().chain(alphabet.chars()) {
         if c.is_ascii_alphabetic() && !key_chars.contains(&c) {
@@ -368,14 +406,20 @@ pub fn playfair_decode(text: &str, key: &str) -> String {
         grid.iter().position(|&x| x == c).unwrap_or(0)
     };
 
-    let clean: Vec<char> = text.to_uppercase().chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    let clean: Vec<char> = text
+        .to_uppercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphabetic())
+        .collect();
     let mut result = String::new();
 
     for i in (0..clean.len()).step_by(2) {
-        if i + 1 >= clean.len() { break; }
+        if i + 1 >= clean.len() {
+            break;
+        }
         let p1 = find_pos(clean[i]);
-        let p2 = find_pos(clean[i+1]);
-        
+        let p2 = find_pos(clean[i + 1]);
+
         let (r1, c1) = (p1 / 5, p1 % 5);
         let (r2, c2) = (p2 / 5, p2 % 5);
 
@@ -398,7 +442,7 @@ pub fn bifid_decode(text: &str, key: &str, period: usize) -> String {
     let mut grid = vec!['\0'; 25];
     let mut key_chars = Vec::new();
     let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ"; // No 'J'
-    
+
     let key = key.to_uppercase().replace('J', "I");
     for c in key.chars().chain(alphabet.chars()) {
         if c.is_ascii_alphabetic() && !key_chars.contains(&c) {
@@ -413,14 +457,18 @@ pub fn bifid_decode(text: &str, key: &str, period: usize) -> String {
         (p / 5, p % 5)
     };
 
-    let clean: Vec<char> = text.to_uppercase().chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    let clean: Vec<char> = text
+        .to_uppercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphabetic())
+        .collect();
     let mut coords = Vec::new();
     for i in (0..clean.len()).step_by(period) {
         let chunk_size = std::cmp::min(period, clean.len() - i);
         let mut rows = Vec::new();
         let mut cols = Vec::new();
         for j in 0..chunk_size {
-            let (r, c) = find_pos(clean[i+j]);
+            let (r, c) = find_pos(clean[i + j]);
             rows.push(r);
             cols.push(c);
         }
@@ -430,7 +478,7 @@ pub fn bifid_decode(text: &str, key: &str, period: usize) -> String {
 
     let mut result = String::new();
     for i in (0..coords.len()).step_by(2) {
-        result.push(grid[coords[i] * 5 + coords[i+1]]);
+        result.push(grid[coords[i] * 5 + coords[i + 1]]);
     }
     result
 }

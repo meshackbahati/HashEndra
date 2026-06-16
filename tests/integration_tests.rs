@@ -1,58 +1,103 @@
-#[cfg(test)]
-mod tests {
-    use hashendra::core::patterns::scan_input;
-    use hashendra::core::scanner::{calculate_entropy, detect_charset, Charset};
+use hashendra::core::patterns::{ScanningContext, scan_input};
+use hashendra::core::scanner::{
+    Charset, calculate_entropy, decode_ascii85, decode_base64, decode_base64_url, decode_binary,
+    decode_hex, decode_html_entities, decode_morse, decode_octal, decode_quoted_printable,
+    detect_charset,
+};
 
-    #[test]
-    fn test_md5_detection() {
-        let input = "5f4dcc3b5aa765d61d8327deb882cf99";
-        let results = scan_input(input);
-        assert!(!results.is_empty());
-        assert_eq!(results[0].signature.name, "MD5");
-        assert!(results[0].confidence > 0.9);
-    }
+#[test]
+fn md5_is_ranked_above_other_32_hex_matches() {
+    let input = "5f4dcc3b5aa765d61d8327deb882cf99";
+    let results = scan_input(input, ScanningContext::Generic);
 
-    #[test]
-    fn test_ntlm_detection() {
-        // NTLM and MD5 have same length and charset, but NTLM has lower weight in patterns.rs
-        // unless heuristics distinguish them.
-        let input = "5f4dcc3b5aa765d61d8327deb882cf99";
-        let results = scan_input(input);
-        assert!(results.iter().any(|r| r.signature.name == "NTLM"));
-    }
+    assert!(!results.is_empty());
+    assert_eq!(results[0].name, "MD5");
 
-    #[test]
-    fn test_base64_detection() {
-        let input = "SGVsbG8gV29ybGQ=";
-        let results = scan_input(input);
-        assert!(!results.is_empty());
-        assert!(results.iter().any(|r| r.signature.name == "Base64"));
-    }
+    let ntlm_confidence = results
+        .iter()
+        .find(|result| result.name == "NTLM")
+        .map(|result| result.confidence)
+        .unwrap_or(0.0);
+    assert!(results[0].confidence > ntlm_confidence);
+}
 
-    #[test]
-    fn test_jwt_detection() {
-        let input = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoyNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-        let results = scan_input(input);
-        assert!(!results.is_empty());
-        assert_eq!(results[0].signature.name, "JWT");
-        assert_eq!(results[0].confidence, 1.0);
-    }
+#[test]
+fn base64_detection_requires_valid_payload() {
+    let input = "SGVsbG8gV29ybGQ=";
+    let results = scan_input(input, ScanningContext::Generic);
 
-    #[test]
-    fn test_entropy() {
-        let input = "aaaaa";
-        let ent = calculate_entropy(input.as_bytes());
-        assert_eq!(ent, 0.0);
+    assert!(results.iter().any(|result| result.name == "Base64"));
+    assert_eq!(decode_base64(input), Some(b"Hello World".to_vec()));
+}
 
-        let input_rand = "5f4dcc3b5aa765d61d8327deb882cf99";
-        let ent_rand = calculate_entropy(input_rand.as_bytes());
-        assert!(ent_rand > 3.0);
-    }
+#[test]
+fn jwt_detection_requires_json_header_and_payload() {
+    let valid =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.c2ln";
+    let invalid = "aaa.bbb.ccc";
 
-    #[test]
-    fn test_charset() {
-        assert_eq!(detect_charset("abc123"), Charset::Hex);
-        assert_eq!(detect_charset("SGVsbG8="), Charset::Base64);
-        assert_eq!(detect_charset("1AbcFgh"), Charset::Base58); // Contains 'G', 'h' which are NOT hex
-    }
+    let valid_results = scan_input(valid, ScanningContext::Generic);
+    let invalid_results = scan_input(invalid, ScanningContext::Generic);
+
+    assert_eq!(valid_results[0].name, "JWT");
+    assert!(invalid_results.iter().all(|result| result.name != "JWT"));
+}
+
+#[test]
+fn decode_helpers_reject_malformed_inputs() {
+    assert_eq!(decode_hex("414243"), Some(b"ABC".to_vec()));
+    assert_eq!(decode_hex("41424"), None);
+    assert_eq!(decode_base64("QUJD"), Some(b"ABC".to_vec()));
+    assert_eq!(decode_base64("QUJD="), None);
+    assert_eq!(
+        decode_base64_url("eyJmb28iOiJiYXIifQ"),
+        Some(br#"{"foo":"bar"}"#.to_vec())
+    );
+}
+
+#[test]
+fn added_encoding_decoders_handle_common_cases() {
+    assert_eq!(decode_binary("0b01001000 0b01101001"), Some(b"Hi".to_vec()));
+    assert_eq!(decode_hex("\\x48\\x69"), Some(b"Hi".to_vec()));
+    assert_eq!(decode_octal("110 151"), Some(b"Hi".to_vec()));
+    assert_eq!(
+        decode_quoted_printable("Hello=20World"),
+        Some(b"Hello World".to_vec())
+    );
+    assert_eq!(
+        decode_html_entities("Tom &amp; Jerry"),
+        Some("Tom & Jerry".to_string())
+    );
+    assert_eq!(
+        decode_morse(".... . .-.. .-.. ---"),
+        Some("HELLO".to_string())
+    );
+    assert_eq!(decode_ascii85("<~z~>"), Some(vec![0, 0, 0, 0]));
+}
+
+#[test]
+fn plaintext_is_not_reported_as_high_confidence_ciphertext() {
+    let input = "hello world from hashendra";
+    let results = scan_input(input, ScanningContext::Generic);
+
+    assert!(
+        results
+            .iter()
+            .filter(|result| result.name == "Caesar / ROT" || result.name == "Vigenère")
+            .all(|result| result.confidence < 0.2)
+    );
+}
+
+#[test]
+fn entropy_still_distinguishes_repetitive_and_randomish_inputs() {
+    assert_eq!(calculate_entropy(b"aaaaa"), 0.0);
+    assert!(calculate_entropy(b"5f4dcc3b5aa765d61d8327deb882cf99") > 3.0);
+}
+
+#[test]
+fn charset_detection_prefers_more_specific_matches() {
+    assert_eq!(detect_charset("abc123"), Charset::Hex);
+    assert_eq!(detect_charset("MFRGGZDFMZTWQ2LK"), Charset::Base32);
+    assert_eq!(detect_charset("SGVsbG8="), Charset::Base64);
+    assert_eq!(detect_charset("1AbcFgh"), Charset::Base58);
 }

@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use regex::Regex;
-use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
-use crate::detectors::hashes::get_hash_signatures;
-use crate::detectors::encodings::get_encoding_signatures;
 use crate::detectors::ciphers::get_cipher_signatures;
+use crate::detectors::encodings::get_encoding_signatures;
+use crate::detectors::hashes::get_hash_signatures;
 use crate::detectors::stego::get_stego_signatures;
+use lazy_static::lazy_static;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SecurityRating {
@@ -18,11 +18,11 @@ pub enum SecurityRating {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ScanningContext {
     Generic,
-    Network,     // Captured traffic (pcap)
-    Filesystem,  // /etc/shadow, registry hives
-    Database,    // SQL dumps, CMS user tables
-    Memory,      // RAM dumps, process memory
-    Blockchain,  // Wallet files, block headers
+    Network,    // Captured traffic (pcap)
+    Filesystem, // /etc/shadow, registry hives
+    Database,   // SQL dumps, CMS user tables
+    Memory,     // RAM dumps, process memory
+    Blockchain, // Wallet files, block headers
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,31 +54,57 @@ lazy_static! {
         sigs.extend(get_encoding_signatures());
         sigs.extend(get_cipher_signatures());
         sigs.extend(get_stego_signatures());
-        
+
         // Load external signatures if present
-        if let Ok(external) = load_external_signatures() {
-            sigs.extend(external);
+        match load_external_signatures() {
+            Ok(external) => sigs.extend(external),
+            Err(e) => eprintln!("WARN: {}", e),
         }
-        
+
         sigs
     };
 
-    pub static ref COMPILED_PATTERNS: Vec<(Signature, Regex)> = ALL_SIGNATURES
-        .iter()
-        .map(|s| (s.clone(), Regex::new(&s.pattern).unwrap_or_else(|_| Regex::new("").unwrap())))
-        .collect();
+    pub static ref COMPILED_PATTERNS: Vec<(Signature, Regex)> = {
+        let mut compiled = Vec::with_capacity(ALL_SIGNATURES.len());
+        for s in ALL_SIGNATURES.iter() {
+            match Regex::new(&s.pattern) {
+                Ok(re) => compiled.push((s.clone(), re)),
+                Err(e) => {
+                    eprintln!(
+                        "WARN: signature \"{}\" has malformed regex pattern \"{}\": {}",
+                        s.name, s.pattern, e
+                    );
+                }
+            }
+        }
+        compiled
+    };
+
+    /// Number of external (user-defined) signatures loaded.
+    pub static ref EXTERNAL_SIGNATURE_COUNT: usize = {
+        match load_external_signatures() {
+            Ok(sigs) => sigs.len(),
+            Err(_) => 0,
+        }
+    };
 }
 
-fn load_external_signatures() -> Result<Vec<Signature>, Box<dyn std::error::Error>> {
-    let home = std::env::var("HOME")?;
+fn load_external_signatures() -> Result<Vec<Signature>, String> {
+    let home = std::env::var("HOME").map_err(|e| format!("cannot determine HOME directory: {}", e))?;
     let path = format!("{}/.hashendra/signatures.json", home);
-    if std::path::Path::new(&path).exists() {
-        let content = std::fs::read_to_string(path)?;
-        let sigs: Vec<Signature> = serde_json::from_str(&content)?;
-        Ok(sigs)
-    } else {
-        Ok(Vec::new())
+    load_external_signatures_from_path(&path)
+}
+
+/// Load custom signatures from a specific JSON file path.
+pub fn load_external_signatures_from_path(path: &str) -> Result<Vec<Signature>, String> {
+    if !std::path::Path::new(path).exists() {
+        return Ok(Vec::new());
     }
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("cannot read {}: {}", path, e))?;
+    let sigs: Vec<Signature> = serde_json::from_str(&content)
+        .map_err(|e| format!("malformed JSON in {}: {}", path, e))?;
+    Ok(sigs)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,7 +122,7 @@ pub struct DetectionResult {
 
 pub fn scan_input(input: &str, context: ScanningContext) -> Vec<DetectionResult> {
     let preprocessed = crate::core::scanner::preprocess_input(input);
-    let mut results = Vec::new();
+    let mut matched = Vec::new();
 
     for (sig, re) in COMPILED_PATTERNS.iter() {
         let match_target = if matches!(sig.detection_type, DetectionType::Stego) {
@@ -107,9 +133,10 @@ pub fn scan_input(input: &str, context: ScanningContext) -> Vec<DetectionResult>
 
         if re.is_match(match_target) {
             let confidence = crate::core::scanner::score_detection(match_target, sig, &context);
-            let parameters = crate::core::scanner::extract_parameters(match_target, re, &sig.parameters);
-            
-            results.push(DetectionResult {
+            let parameters =
+                crate::core::scanner::extract_parameters(match_target, re, &sig.parameters);
+
+            let result = DetectionResult {
                 name: sig.name.clone(),
                 description: sig.description.clone(),
                 confidence,
@@ -119,10 +146,17 @@ pub fn scan_input(input: &str, context: ScanningContext) -> Vec<DetectionResult>
                 common_name: sig.common_name.clone(),
                 hashcat_mode: sig.hashcat_mode,
                 john_format: sig.john_format.clone(),
-            });
+            };
+
+            if result.confidence >= 0.20 {
+                matched.push((sig.clone(), result));
+            }
         }
     }
 
+    crate::core::scanner::apply_ambiguity_penalties(&preprocessed, &context, &mut matched);
+
+    let mut results: Vec<DetectionResult> = matched.into_iter().map(|(_, result)| result).collect();
     results.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
     results
 }

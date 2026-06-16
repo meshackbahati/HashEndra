@@ -1,4 +1,4 @@
-use crate::core::patterns::{Signature, DetectionType, SecurityRating};
+use crate::core::patterns::{DetectionType, SecurityRating, Signature};
 
 pub fn get_encoding_signatures() -> Vec<Signature> {
     vec![
@@ -57,7 +57,7 @@ pub fn get_encoding_signatures() -> Vec<Signature> {
         Signature {
             name: "Hex".to_string(),
             description: "Hexadecimal encoding".to_string(),
-            pattern: r"^[a-fA-F0-9]+$".to_string(),
+            pattern: r"^(?:[a-fA-F0-9]+|(?:(?:0x|\\x)?[a-fA-F0-9]{2}\s*)+)$".to_string(),
             detection_type: DetectionType::Encoding,
             confidence_weight: 0.4,
             common_name: Some("hex".to_string()),
@@ -83,7 +83,7 @@ pub fn get_encoding_signatures() -> Vec<Signature> {
         Signature {
             name: "URL Encoding".to_string(),
             description: "Percent-encoding (RFC 3986)".to_string(),
-            pattern: r"^(?:%[0-9A-Fa-f]{2}|[A-Za-z0-9\-._~])+$".to_string(),
+            pattern: r"^(?:%[0-9A-Fa-f]{2}|[A-Za-z0-9\-._~]|\+)+$".to_string(),
             detection_type: DetectionType::Encoding,
             confidence_weight: 0.3,
             common_name: Some("urlencode".to_string()),
@@ -135,10 +135,23 @@ pub fn get_encoding_signatures() -> Vec<Signature> {
         Signature {
             name: "Binary (0/1)".to_string(),
             description: "Binary string representation".to_string(),
-            pattern: r"^[01\s]{8,}$".to_string(),
+            pattern: r"^(?:[01\s]{8,}|(?:(?:0b)?[01]{8}\s*)+)$".to_string(),
             detection_type: DetectionType::Encoding,
             confidence_weight: 0.3,
             common_name: Some("binary".to_string()),
+            hashcat_mode: None,
+            john_format: None,
+            security_rating: None,
+            compliance_refs: vec![],
+            parameters: vec![],
+        },
+        Signature {
+            name: "Octal".to_string(),
+            description: "Octal byte string representation".to_string(),
+            pattern: r"^(?:(?:0o|\\)?[0-7]{3}\s*){2,}$".to_string(),
+            detection_type: DetectionType::Encoding,
+            confidence_weight: 0.45,
+            common_name: Some("octal".to_string()),
             hashcat_mode: None,
             john_format: None,
             security_rating: None,

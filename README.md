@@ -1,4 +1,4 @@
-# HashEndra 
+# HashEndra  v2.0
 
 <p align="center">
   <img src="assets/logo.png" width="400" alt="HashEndra Logo">
@@ -6,7 +6,9 @@
 
 **The Universal Forensic Decryption & Hashing Engine**
 
-HashEndra is a high-performance, intelligence-driven digital evidence classification engine built for security professionals, CTF players, forensic analysts, and developers. It goes far beyond simple regex matching — combining Shannon entropy analysis, Bayesian-like scoring, statistical cryptanalysis, and deep recursive decoding into a single, production-grade CLI tool.
+> **Full documentation available in the [`docs/`](docs/README.md) directory** — includes architecture diagrams (Mermaid), CLI reference, user guide, forensics walkthrough, configuration guide, and development guide.
+
+HashEndra is a high-performance, intelligence-driven digital evidence classification engine built for security professionals, CTF players, forensic analysts, and developers. It combines Shannon entropy analysis, Bayesian-like scoring, statistical cryptanalysis, and deep recursive decoding into a single, production-grade CLI tool with forensic-grade disk and volume recovery.
 
 **Author**: Meshack Bahati
 **GitHub**: [https://github.com/meshackbahati/HashEndra](https://github.com/meshackbahati/HashEndra)
@@ -29,15 +31,17 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
   - [ROT Brute-Force](#7-rot-brute-force)
   - [XOR Key Cracking](#8-xor-key-cracking)
   - [Forensic Binary Scanning](#9-forensic-binary-scanning)
-  - [Interactive Workshop](#10-interactive-workshop)
-  - [Batch File Processing](#11-batch-file-processing)
-  - [JSON Output](#12-json-output)
+  - [Foremost-Style Carving](#10-foremost-style-carving)
+  - [Interactive Workshop](#11-interactive-workshop)
+  - [Batch File Processing](#12-batch-file-processing)
+  - [JSON Output](#13-json-output)
 - [Classical Cipher Suite](#classical-cipher-suite)
 - [Layered Decoding Engine](#layered-decoding-engine)
 - [Signature Library](#signature-library)
 - [Security Compliance](#security-compliance)
 - [Architecture](#architecture)
 - [Detection Logic FAQ](#detection-logic-faq)
+- [Custom Signatures](#custom-signatures)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -48,21 +52,41 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 ### Core Detection Engine
 - **2,000+ Signatures** covering cryptographic hashes, password KDFs, encodings, classical ciphers, blockchain formats, steganographic markers, and forensic artifacts.
 - **Shannon Entropy Analysis** for probabilistic scoring beyond regex matching.
-- **Auto-Repair** — fixes malformed input (colons, whitespace, missing Base64 padding) automatically.
-- **Context-Aware Scoring** — adjusts confidence based on source context (network, database, filesystem, memory, blockchain).
+- **Auto-Repair** — fixes malformed input (colons, whitespace, missing Base64 padding) automatically without destroying structured data (SSH keys, PGP blocks, shadow entries are preserved).
+- **Stricter Decode Validation** — validates decoded payloads before raising confidence, reducing false positives from regex-only matches.
+- **Context-Aware Scoring** — adjusts confidence based on source context (network, database, filesystem, memory, blockchain). Unknown contexts print a warning.
 - **Deep Parameter Extraction** — parses BCrypt, Argon2, Scrypt, PBKDF2, and JWT for metadata (cost, salt, memory, header/payload).
 - **Security Audit** — flags every detection against NIST SP 800-131A, PCI DSS 4.0, and GDPR compliance standards.
+- **Multi-threaded safe output** — thread-safe stdout with mutex, no output interleaving.
 
 ### Advanced Cipher Suite
 - **10 Classical Cipher Crackers** — Caesar, Atbash, Affine, Baconian, Vigenere, Rail Fence, Columnar Transposition, Simple Substitution, Playfair, and Bifid.
 - **Statistical Cryptanalysis Core** — Index of Coincidence, Chi-Squared analysis, quadgram scoring, Hamming distance, and multi-byte XOR key estimation.
-- **Layered Decoding Engine** — recursive auto-unwrapper that peels back nested Hex, Base64, Base32, URL, Caesar, Vigenere, Affine, Atbash, Rail Fence, and XOR layers with cycle detection.
+- **Layered Decoding Engine** — recursive auto-unwrapper that peels back nested Hex, Base64, Base32, Base58, Binary, Ascii85, Quoted-Printable, HTML entities, URL, Caesar, Vigenere, Affine, Baconian, Columnar, Rail Fence, and XOR layers with cycle detection.
 - **Interactive Workshop** — manual decoding playground with live state tracking.
 
 ### Forensic Mode
 - **Memory-Mapped Binary Scanning** — scans disk images, RAM dumps, and binary files for hidden hashes and encoded strings using zero-copy `mmap`.
+- **Disk Layout Inspection** — parses MBR/GPT layouts and fingerprints NTFS, FAT12/16/32, exFAT, ReFS, ext2/3/4, swap, Btrfs, XFS, F2FS, HFS+, APFS, JFS, ReiserFS, ISO9660, and UDF.
+- **NTFS MFT Enumeration** — walks MFT records, highlights deleted entries, recovers named ADS, rebuilds resident and non-resident streams, and summarizes `$Bitmap`, `$LogFile`, and `$UsnJrnl`.
+- **FAT Volume Recovery** — enumerates FAT12/16/32 directory entries, flags deleted files, and rebuilds deleted contiguous file data.
+- **ext2/3/4 Volume Recovery** — parses superblocks, walks inode tables, follows extent/direct/indirect block maps, recovers deleted files.
 - **Directory Recursion** — walks entire directory trees to locate evidence across filesystems.
-- **Magic Byte Detection & File Carving** — identifies embedded file signatures (ZIP, PDF, PNG, ELF, etc.) within other files and automatically extracts them to dedicated folders.
+- **Structured Triage Reports** — emits machine-readable JSON for single files and full directory scans.
+- **Artifact Header Inspection** — parses PNG, PDF, ZIP, ELF, PE, Mach-O, SQLite, and Gzip headers.
+- **Magic Byte Detection & File Carving** — identifies embedded file signatures (ZIP, PDF, PNG, ELF, etc.) within other files and automatically extracts them.
+- **Container-Aware Matryoshka Extraction** — unpacked ZIP/TAR members rescanned for nested payloads with byte-quota safety limit (prevents zip-bomb disk fills).
+- **Safe Extraction** — rejects block devices, FIFOs, and broken symlinks with clear error messages.
+
+### Quality-of-Life Improvements (v2.0)
+- **Stdin streaming** — processes input line-by-line in real-time (no more batch buffering).
+- **XOR cracking** — tries raw ASCII bytes first, hex-decoded fallback second; no more silent misinterpretation.
+- **ROT brute-force** — results ranked by Chi-Squared score, best match marked with `*`.
+- **`--decode` and `--deep-decrypt`** — now use identical logic, produce consistent results.
+- **ASCII85** — accepts data with or without `~>` end marker.
+- **Context validation** — unknown contexts print a warning instead of silently falling back.
+- **Workshop binary load** — warns when binary files are loaded, shows hex preview.
+- **Installation** — system-wide `/usr/local/bin` with automatic cleanup; `--uninstall` and `--keep` flags.
 
 ---
 
@@ -74,11 +98,16 @@ HashEndra is a high-performance, intelligence-driven digital evidence classifica
 curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
 ```
 
-This script automatically detects your OS, installs Rust/Cargo if needed, builds the project, and copies the binary to `/usr/local/bin/`.
+This script:
+- Detects your OS (Linux, macOS, Windows via MSYS2/MinGW)
+- Installs Rust/Cargo if missing
+- Builds the project in release mode
+- Installs to `/usr/local/bin` (Linux/macOS) or `~/.cargo/bin` (Windows)
+- Adds the directory to your PATH (interactive prompt)
+- Cleans up the cloned repository after installation
+- Supports `--keep`, `--prefix`, and `--uninstall` flags
 
 ### Manual Installation
-
-Ensure you have Rust installed (1.75+ recommended):
 
 ```bash
 git clone https://github.com/meshackbahati/HashEndra.git
@@ -90,7 +119,18 @@ sudo cp target/release/hashendra /usr/local/bin/
 ### Verify Installation
 
 ```bash
+hashendra --version
 hashendra --help
+```
+
+### Uninstall
+
+```bash
+# Via installer:
+bash install.sh --uninstall
+
+# Or manually:
+rm /usr/local/bin/hashendra
 ```
 
 ---
@@ -132,13 +172,22 @@ OPTIONS:
     -f, --file <FILE>        File to read hashes from (one per line)
     -j, --json               Output results in JSON format
     -v, --verbose            Verbose mode (show additional metadata)
-        --decode             Attempt to decode the input (Base64, Hex, URL, Base32, Base58)
+        --decode             Attempt to decode the input (Base64, Hex, URL, Base32, Base58, ...)
         --deep-decrypt       Run deep recursive decryption (multi-layer auto-unwrapping)
-        --rot                Brute-force all 25 ROT/Caesar shifts
-        --xor                Crack single-byte XOR with frequency analysis
+        --rot                Brute-force all 25 ROT/Caesar shifts, ranked by Chi-Squared
+        --xor                Crack single-byte XOR (tries raw ASCII bytes first, then hex)
         --context <CONTEXT>  Detection context: generic, network, database, filesystem, memory, blockchain
                              [default: generic]
+    -V, --version            Print version information
     -h, --help               Print help
+```
+
+**Forensic subcommands:**
+
+```text
+hashendra forensic scan <PATH> [--no-extract]
+hashendra forensic disk <PATH> [--sector-size 512] [--offset BYTES] [--fs ntfs|fat|ext4|...]
+hashendra forensic carve <PATH> | --input <PATH> [--types png,jpg] [-o DIR] [-c conf] [-M] [--dry-run]
 ```
 
 ---
@@ -187,7 +236,7 @@ hashendra "32ed87bdb5fdc5e9cba88547376818d4"
 
 ### 2. Auto-Repair & Preprocessing
 
-HashEndra automatically fixes malformed input before analysis:
+HashEndra automatically fixes malformed input without destroying structured data:
 
 ```bash
 # Colon-separated hex (common in network captures)
@@ -200,13 +249,13 @@ hashendra "  5d41402abc4b2a76b9719d911017c592  "
 hashendra --decode "SGVsbG8gV29ybGQ"
 ```
 
-The engine strips colons, whitespace, normalizes case, and repairs Base64 padding before matching.
+The engine strips colons and whitespace only when the input looks like a hash or encoding. SSH keys, PGP blocks, `/etc/shadow` entries, and other structured data with spaces or delimiters are left intact.
 
 ---
 
 ### 3. Context-Aware Detection
 
-Provide context to increase detection accuracy. Context adjusts confidence scores for signatures that are more probable in specific environments:
+Provide context to increase detection accuracy:
 
 ```bash
 # Network traffic (pcap) — boosts network-relevant hashes
@@ -218,14 +267,13 @@ hashendra '$2a$10$N9qo8uLOickgx2ZMRZoMy.Mr/.cIGPqnG3nj.3Jp6tNJ2vQm7Fv.y' --conte
 # Filesystem analysis (/etc/shadow) — boosts Unix crypt formats
 hashendra '$6$rounds=5000$salt$hash' --context filesystem
 
-# Memory dump analysis
-hashendra "some_hash" --context memory
-
 # Blockchain forensics — boosts wallet and block header formats
 hashendra "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" --context blockchain
 ```
 
 **Available contexts:** `generic` (default), `network`, `database`, `filesystem`, `memory`, `blockchain`
+
+Unknown contexts print a warning and fall back to `generic`.
 
 ---
 
@@ -236,15 +284,6 @@ HashEndra extracts metadata from structured password hashes:
 ```bash
 # BCrypt — extracts version, cost, and salt
 hashendra '$2a$10$N9qo8uLOickgx2ZMRZoMy.Mr/.cIGPqnG3nj.3Jp6tNJ2vQm7Fv.y'
-```
-
-**Expected Output (includes):**
-```
-+-- PARAMETERS --------------------------------------------------+
-   Version : 2a
-   Cost    : 10
-   Salt    : N9qo8uLOickgx2ZMRZoMy.
-+----------------------------------------------------------------+
 ```
 
 **Supported KDF extractions:**
@@ -274,68 +313,34 @@ hashendra --decode "48656c6c6f20576f726c64"
 # Decode URL-encoded
 hashendra --decode "Hello%20World%21"
 # Output: Hello World!
-
-# Detect encoding type (without decoding)
-hashendra "SGVsbG8gV29ybGQ="
 ```
 
-**Supported decoders:** Base64, Hex, URL (percent-encoding), Base32, Base58 (Bitcoin/Flickr)
+**Supported decoders:** Base64, Hex (raw, spaced, `0x`, `\x`), URL (percent-encoding), Base32, Base58 (Bitcoin/Flickr), Binary (`0/1` and `0b` forms), Octal (`0o`, escaped, and grouped bytes), Adobe Ascii85/Base85 (with or without `~>` markers), Quoted-Printable, HTML entities, and Morse.
 
 ---
 
 ### 6. Deep Recursive Decryption
 
-The Layered Decoding Engine automatically peels back nested layers of encoding and encryption:
+The Layered Decoding Engine automatically peels back nested layers:
 
 ```bash
 # Multi-layer: Hex -> Base64 -> Cleartext
 hashendra --deep-decrypt "5a7a4a375757396656574666636d56665a325666546d6c7664584e664d4739516331397a6347567364463970564639796232356e66513d3d"
-```
 
-**Expected Output:**
-```
-[SCAN] Starting deep recursive unwrapping for: 5a7a4a37...
-  [LAYER 1] Detected: Hex -> ZzJ7WW9fVWFfcmVfZ2VfTmlvdXNfMG9Qc19zcGVsdF9pVF9yb25nfQ==
-  [LAYER 2] Detected: Base64 -> g2{Yo_Ua_re_ge_Nious_0oPs_spelt_iT_rong}
-
-[OK] Fully decrypted in 2 layers
-[FINISH] Final Payload: g2{Yo_Ua_re_ge_Nious_0oPs_spelt_iT_rong}
-```
-
-```bash
 # ROT13-encoded CTF flag
 hashendra --deep-decrypt "t24frp{Lbh_ner_n_inyvqngrq_NTRAG}"
-```
 
-**Expected Output:**
-```
-  [LAYER 1] Detected: Caesar/ROT -> g24sec{You_are_a_validated_AGENT}
-[OK] Fully decrypted in 1 layers
-```
-
-```bash
 # Simple Base64
 hashendra --deep-decrypt "SGVsbG8gV29ybGQ="
 ```
 
-**Expected Output:**
-```
-  [LAYER 1] Detected: Base64 -> Hello World
-[OK] Fully decrypted in 1 layers
-```
-
-**How it works:**
-1. At each layer, the engine generates all plausible decoding candidates (Hex, Base64, Base32, URL, Caesar, Vigenere, Affine, Atbash, Rail Fence, XOR).
-2. The highest-confidence candidate is selected.
-3. The engine checks for cycles (prevents infinite loops) and validates plaintext (JSON, XML, Gzip, PE, ELF magic bytes).
-4. Statistical crackers are gated by an IoC heuristic — they only fire when the input looks like ciphertext, preventing mangling of already-decoded text.
-5. Maximum depth: 10 layers.
+`--decode` and `--deep-decrypt` now use the same engine and produce identical results.
 
 ---
 
 ### 7. ROT Brute-Force
 
-Brute-force all 25 ROT/Caesar shifts:
+Brute-force all 25 ROT/Caesar shifts, ranked by Chi-Squared score:
 
 ```bash
 hashendra --rot "Uryyb Jbeyq"
@@ -343,33 +348,25 @@ hashendra --rot "Uryyb Jbeyq"
 
 **Expected Output:**
 ```
-ROT-1:  Vszzc Kcfme
-ROT-2:  Wtaad Ldgnf
-...
-ROT-13: Hello World
-...
-ROT-25: Tqxxn Inqkc
+  * 13: Hello World (chi2=96.3)
+    03: Uryyb Jbeyq (chi2=452.1)
+    ...
 ```
 
-Every shift is shown so you can visually identify the correct plaintext.
+The `*` marker indicates the statistically best match.
 
 ---
 
 ### 8. XOR Key Cracking
 
-Crack single-byte XOR encryption using frequency analysis:
+Crack single-byte XOR encryption (raw ASCII bytes tried first, then hex-decoded):
 
 ```bash
-hashendra --xor "48656c6c6f"
-```
+# XOR crack raw ASCII text
+hashendra --xor "Hello"
 
-**Expected Output:**
-```
-+-- XOR CRACK RESULTS ------------------------------------------+
-   Key: 0x00 -> Hello    Score: 1.00
-   Key: 0x20 -> hELLO    Score: 0.85
-   ...
-+----------------------------------------------------------------+
+# XOR crack hex-encoded input (fallback)
+hashendra --xor "48656c6c6f"
 ```
 
 The engine tests all 256 possible single-byte keys and ranks results by printable character ratio.
@@ -378,27 +375,40 @@ The engine tests all 256 possible single-byte keys and ranks results by printabl
 
 ### 9. Forensic Binary Scanning & File Carving
 
-Scan binary files (disk images, memory dumps, firmware) for hidden hashes, encoded strings, and embedded files:
-
 ```bash
-# Scan a single file
-hashendra forensic evidence.raw
+# Inspect partition layout
+hashendra forensic disk disk.dd
 
-# Scan an entire directory recursively
-hashendra forensic /path/to/evidence/
+# Recover deleted NTFS files
+hashendra forensic disk disk.dd --ntfs --offset 1048576 --deleted-only --extract-data recovered/
+
+# Scan a directory for evidence
+hashendra forensic scan /path/to/evidence/
+
+# Emit structured JSON
+hashendra --json forensic scan evidence.raw --no-extract
 ```
 
-**How it works:**
-- **Recursive Scanning**: Walks through all subdirectories to analyze every file.
-- **Strings & Hashes**: Identifies readable strings (URLs, IPs, Emails, Hashes) using regex and entropy.
-- **Embedded File Detection**: Scans for magic bytes of common file formats (ZIP, RAR, 7z, PDF, ELF, etc.).
-- **Automatic Extraction**: When a hidden file is detected, it is extracted to a dedicated folder `extracted_<filename>/`.
+Block devices, FIFOs, and broken symlinks are rejected with clear error messages.
 
 ---
 
-### 10. Interactive Workshop
+### 10. Foremost-Style Carving
 
-A manual decoding playground for forensic analysts and CTF players:
+```bash
+# Preview embedded artifacts
+hashendra forensic carve evidence.raw --types png,pdf --dry-run
+
+# Carve with matryoshka recursive extraction (1 GB safety quota enforced)
+hashendra forensic carve firmware.bin -M --depth 2
+
+# List carveable types
+hashendra forensic carve --list-types
+```
+
+---
+
+### 11. Interactive Workshop
 
 ```bash
 # Start with empty state
@@ -408,97 +418,43 @@ hashendra workshop
 hashendra workshop "SGVsbG8gV29ybGQ="
 ```
 
-**Workshop Commands:**
+**Workshop Commands:** `/set`, `/load`, `/base64`, `/hex`, `/rot13`, `/xor`, `/deep`, `/analyze`, `/status`, `/undo`, `/history`, `/exit`, and more. Use `/help` in the workshop for the full list.
 
-| Command | Description |
-|---------|-------------|
-| `/set <text>` | Set the current working text |
-| `/analyze`, `/detect` | Run full forensic analysis on current text |
-| `/base64` | Decode current text as Base64 |
-| `/base32` | Decode current text as Base32 |
-| `/base58` | Decode current text as Base58 |
-| `/hex` | Decode current text as Hex |
-| `/url` | Decode current text as URL-encoding |
-| `/rot13` | Apply ROT13 to current text |
-| `/xor <key>` | XOR current text with a string key |
-| `/deep` | Run the deep auto-unwrapper on current text |
-| `/history` | Show the history of changes |
-| `/undo` | Revert to the previous text state |
-| `/status` | Show current working text |
-| `/help` | Show all available commands |
-| `/exit` | Exit the workshop |
-
-**Example Session:**
-```
-hashendra> /set SGVsbG8gV29ybGQ=
-  [OK] Current text set.
-hashendra> /base64
-  [OK] Decoded: Hello World
-hashendra> /rot13
-  [OK] Applied ROT13: Uryyb Jbeyq
-hashendra> /status
-  Current: Uryyb Jbeyq
-hashendra> /undo
-  [OK] Undone. Current: Hello World
-hashendra> /exit
-```
-
-You can also type raw text (without a `/` prefix) to set it as the current working text directly.
+Loading a binary file shows a hex preview and warns about potential garbage output.
 
 ---
 
-### 11. Batch File Processing
-
-Process multiple hashes from a file (one per line):
+### 12. Batch File Processing
 
 ```bash
+# Process multiple hashes from a file (one per line, results streamed sequentially)
 hashendra -f hashes.txt
-```
 
-Each line is analyzed independently, and results are printed sequentially.
+# JSON output (one JSON object per line — NDJSON format, pipe-safe)
+hashendra -j -f hashes.txt
+```
 
 ---
 
-### 12. JSON Output
-
-Get machine-readable JSON output for integration with other tools:
+### 13. JSON Output
 
 ```bash
 hashendra -j "5d41402abc4b2a76b9719d911017c592"
-```
 
-**Expected Output:**
-```json
-[
-  {
-    "name": "MD5",
-    "description": "Message-Digest Algorithm 5",
-    "confidence": 0.95,
-    "security_rating": "Broken",
-    "compliance_refs": ["PCI DSS 4.0", "NIST SP 800-131A"],
-    "hashcat_mode": 0,
-    "john_format": "raw-md5"
-  }
-]
-```
-
-Combine with `jq` for scriptable workflows:
-```bash
-hashendra -j "5d41402abc4b2a76b9719d911017c592" | jq '.[0].name'
+# Pipe with jq
+hashendra --json forensic scan evidence.raw --no-extract | jq '.hits'
 ```
 
 ---
 
 ## Classical Cipher Suite
 
-HashEndra includes automated crackers for 10 classical cipher families:
-
 | Cipher | Method | Complexity |
 |--------|--------|-----------|
 | **Caesar / ROT** | Brute-force all 26 shifts, Chi-Squared scoring | O(26) |
 | **Atbash** | Alphabet reversal, Chi-Squared validation | O(n) |
 | **Affine** | Tests all 312 valid (a, b) pairs | O(312) |
-| **Baconian** | Binary decoding (both 24 and 26 char variants) | O(n) |
+| **Baconian** | Binary decoding (24 and 26 char variants) | O(n) |
 | **Vigenere** | IoC-based period detection + column-wise Caesar | O(26k) |
 | **Rail Fence** | Tests rails 2-10, Chi-Squared scoring | O(9n) |
 | **Columnar Transposition** | Permutation testing for small column counts | O(k!) |
@@ -510,69 +466,50 @@ HashEndra includes automated crackers for 10 classical cipher families:
 
 ## Layered Decoding Engine
 
-The recursive engine supports the following transform stack at each layer:
-
 | Decoder | Priority | Gating |
 |---------|----------|--------|
 | Hex | Highest (1.1) | Always |
 | Base64 | High (1.0) | Always |
 | URL | High (1.0) | Always |
 | Base32 | High (0.9) | Always |
-| Caesar/ROT | Medium (0.8) | No spaces + 20% Chi-Squared improvement |
-| Affine | Medium (0.75) | `is_likely_ciphertext` (IoC < 0.055) |
+| Base58 | High (0.85) | Always |
+| Binary | High (0.95) | Always |
+| Ascii85 | High (0.95) | Data present |
+| Quoted-Printable | High (0.90) | `=` escapes |
+| HTML Entities | High (0.90) | `&...;` entities |
+| Caesar/ROT | Medium (0.8) | No spaces + Chi-Squared improvement |
+| Baconian | Medium (0.8) | Only `A/B` alphabet |
+| Affine | Medium (0.75) | `is_likely_ciphertext` |
 | Vigenere | Medium (0.7) | `is_likely_ciphertext` |
 | Rail Fence | Medium (0.65) | `is_likely_ciphertext` |
-| Atbash | Lower (0.6) | No spaces + 20% Chi-Squared improvement |
-| XOR (Multi-byte) | Variable | Score > 0.8 + non-identity key + result differs |
-
-**Termination Heuristics:**
-- **Spaces detected** in output → plaintext reached, stop.
-- **Common English words** found → plaintext reached, stop.
-- **IoC > 0.055** on alphabetic characters → English-like distribution, stop expensive crackers.
-- **Cycle detection** → previous output repeated, stop.
-- **Max depth** → 10 layers.
+| Columnar | Medium (0.6) | `is_likely_ciphertext` |
+| Atbash | Lower (0.6) | No spaces + Chi-Squared improvement |
+| XOR (Single-byte) | Variable | Printable output |
+| XOR (Multi-byte) | Variable | Score > 0.8 + non-identity key |
 
 ---
 
 ## Signature Library
 
-The signature database covers the following categories:
-
-### Cryptographic Hashes
-MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-3 (all variants), RIPEMD-128/160/256/320, Whirlpool, Tiger, BLAKE2b/2s, BLAKE3, Snefru, HAVAL, GOST R 34.11, SM3, Streebog, and more.
-
-### Password KDFs
-BCrypt, Argon2 (id/i/d), Scrypt, PBKDF2 (SHA-1/256/512), Unix Crypt (DES, MD5, SHA-256, SHA-512), Django (PBKDF2, BCrypt, Argon2), Cisco Type 5/7/8/9, MSSQL, MySQL, Oracle, WordPress (phpass), Drupal, Joomla.
-
-### Encodings
-Base64 (standard, URL-safe), Base32, Base58, Base85, Hex, URL encoding, Punycode, UUencode, ROT13/ROT47, Ascii85, EBCDIC, Morse Code, Binary.
-
-### Blockchain & Cryptocurrency
-Bitcoin (P2PKH, P2SH, Bech32), Ethereum addresses, Litecoin, Monero, Ripple, IPFS CIDs, Bitcoin WIF keys.
-
-### Steganography Markers
-PNG chunks (IHDR, IDAT, tEXt, iTXt, zTXt), JPEG (JFIF, Exif, IPTC), TIFF, GIF, BMP, WebP, RIFF, OpenPGP, ZIP/PKZIP, PDF, ELF, PE/MZ, Mach-O, RAR, 7z, OLE2.
-
-### Network & Protocol
-JWTs, API keys (AWS, Google, Stripe, GitHub, Slack, Twilio, SendGrid, Mailgun, Firebase), SSH keys, PGP signatures, SSL certificates, MAC addresses, UUIDs, IP addresses, SRI hashes.
+The signature database covers:
+- **Cryptographic Hashes**: MD4, MD5, SHA-1/224/256/384/512/3, RIPEMD, Whirlpool, Tiger, BLAKE2/3, Snefru, HAVAL, GOST, SM3, Streebog
+- **Password KDFs**: BCrypt, Argon2, Scrypt, PBKDF2, Unix Crypt, Django, Cisco, MSSQL, MySQL, Oracle, WordPress, Drupal, Joomla
+- **Encodings**: Base64/32/58/85, Hex, URL, Punycode, UUencode, ROT13/47, EBCDIC, Morse, Binary, Octal
+- **Blockchain**: Bitcoin (P2PKH, P2SH, Bech32), Ethereum, Litecoin, Monero, Ripple, IPFS CIDs, WIF keys
+- **Steganography**: PNG chunks, JPEG Exif/IPTIC, TIFF, GIF, BMP, WebP, RIFF, OpenPGP, ZIP, PDF, ELF, PE, Mach-O, RAR, 7z, OLE2
+- **Network & Protocol**: JWTs, API keys (AWS, Google, Stripe, GitHub, Slack, Twilio, SendGrid, Mailgun, Firebase), SSH keys, PGP, SSL certs, MACs, UUIDs, IPs, SRI hashes
 
 ---
 
 ## Security Compliance
 
-Every detection is audited against industry standards:
-
 | Standard | What It Checks |
 |----------|---------------|
 | **NIST SP 800-131A** | Algorithm strength (broken, weak, secure) |
-| **PCI DSS 4.0** | Payment card data protection requirements |
+| **PCI DSS 4.0** | Payment card data protection |
 | **GDPR** | Personal data encryption adequacy |
 
-Ratings are displayed alongside every detection:
-- **Secure** — Modern, strong algorithms (Argon2, SHA-3, BLAKE3)
-- **Weak** — Not broken but aging or fast (SHA-1, PBKDF2 with low iterations)
-- **Broken** — Known collision attacks (MD5, MD4)
-- **Insecure** — Trivially crackable (DES, RC4-40)
+Ratings: **Secure** (Argon2, SHA-3, BLAKE3), **Weak** (SHA-1, PBKDF2 low iterations), **Broken** (MD5, MD4), **Insecure** (DES, RC4-40)
 
 ---
 
@@ -583,83 +520,63 @@ hashendra/
 ├── src/
 │   ├── main.rs                      # CLI entry point, workshop, deep-decrypt
 │   ├── core/
-│   │   ├── mod.rs                   # Module declarations
 │   │   ├── patterns.rs              # Signature database, scan_input()
 │   │   ├── scanner.rs               # Entropy, scoring, decoders, ROT/XOR
 │   │   ├── cryptanalysis.rs         # IoC, Chi-Squared, quadgrams, XOR cracker
 │   │   └── recursive_engine.rs      # Layered Decoding Engine
 │   ├── detectors/
-│   │   ├── mod.rs
 │   │   ├── hashes.rs                # 1,000+ hash signatures
 │   │   ├── encodings.rs             # Encoding signatures
 │   │   ├── ciphers.rs               # Cipher signatures
 │   │   ├── classic_ciphers.rs       # 10 classical cipher crackers
 │   │   └── stego.rs                 # Steganographic signatures
+│   ├── forensics/
+│   │   ├── carve.rs                 # Foremost-style carving
+│   │   ├── disk.rs                  # Disk layouts, partitions, VBRs
+│   │   ├── ntfs.rs                  # NTFS MFT, deleted-file recovery
+│   │   ├── fat.rs                   # FAT12/16/32 recovery
+│   │   ├── ext.rs                   # ext2/3/4 recovery
+│   │   ├── report.rs               # Triage reports
+│   │   ├── inspect.rs              # Artifact metadata parsing
+│   │   ├── strings.rs              # ASCII/UTF-16 extraction
+│   │   ├── directory.rs            # Directory scan summaries
+│   │   └── filetypes.rs            # File type detection
 │   └── utils/
-│       ├── mod.rs
+│       ├── io.rs                    # Shared safe_print macros (thread-safe)
 │       └── io_manager.rs            # Memory-mapped forensic I/O
-├── assets/
-│   └── logo.png                     # Project logo
-├── install.sh                       # Automated installer
-├── Cargo.toml                       # Dependencies
-└── README.md                        # This file
+├── assets/logo.png
+├── install.sh                       # Automated installer (--keep, --prefix, --uninstall)
+├── Cargo.toml
+└── README.md
 ```
 
-**Key Dependencies:**
-
-| Crate | Purpose |
-|-------|---------|
-| `clap` | CLI argument parsing |
-| `colored` | Terminal color output |
-| `regex` | Pattern matching for 2,000+ signatures |
-| `rayon` | Parallel processing |
-| `memmap2` | Memory-mapped file I/O for forensic scanning |
-| `serde` / `serde_json` | JSON serialization |
-| `hex` | Hex encoding/decoding |
-| `itertools` | Permutation generation for cipher crackers |
-| `walkdir` | Recursive directory traversal |
-| `num-bigint` | Large number arithmetic (Base58) |
+**Key Dependencies:** `clap`, `colored`, `regex`, `rayon`, `memmap2`, `serde`/`serde_json`, `hex`, `itertools`, `walkdir`, `num-bigint`
 
 ---
 
 ## Detection Logic FAQ
 
 ### Why does a short string like "test" detect as Base64?
-HashEndra is a **probabilistic** engine. A 4-character string like "test" perfectly satisfies the structural requirements of a Base64 block (valid characters, correct length quantum). The engine identifies it as a 70% probable match. For very short strings, structural collisions are common — this is by design. Use `--context` to reduce false positives.
-
-### When are KDF parameters (cost/salt) shown?
-Parameters like **Cost** and **Salt** are only extracted when a string matches a specific **Key Derivation Function** signature (BCrypt, Argon2, Scrypt, PBKDF2). Regular strings will not show parameters.
+HashEndra is a **probabilistic** engine. A 4-character string like "test" satisfies the structural requirements of a Base64 block. The engine identifies it as a ~70% probable match. For very short strings, structural collisions are common — use `--context` to reduce false positives.
 
 ### Why does deep-decrypt stop early?
-The engine uses multiple termination heuristics:
-- **Spaces in output** indicate plaintext was reached.
-- **IoC analysis** detects English-like letter distributions.
-- **Cycle detection** prevents infinite loops.
-- If no decoder produces a valid candidate, the engine stops.
+The engine uses multiple termination heuristics: spaces in output (plaintext reached), IoC analysis (English-like distribution), cycle detection (prevents infinite loops), and max depth (10 layers).
 
 ### How does context-aware detection work?
-When you specify `--context network`, the engine boosts confidence for signatures that are commonly found in network traffic (e.g., NTLM, Kerberos tickets) and reduces confidence for signatures more common in other contexts. This reduces false positives for the specific analysis scenario.
+When you specify `--context network`, the engine boosts confidence for signatures commonly found in network traffic and reduces confidence for others. Unknown context values print a warning.
 
 ### Can I add custom signatures?
-Yes. Create a file at `~/.hashendra/signatures.json` with an array of signature objects. HashEndra automatically loads these at startup.
+Yes. Create `~/.hashendra/signatures.json`. Syntax errors in the JSON file are reported as warnings at startup. See [Custom Signatures](#custom-signatures).
 
-**Signature Structure:**
+### Why does XOR cracking try ASCII first instead of hex?
+v2.0 changed the behavior: raw ASCII bytes are tried first (the most common use case). Hex-decoded bytes are only tried if the input looks like hex and raw mode produced no results.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | Yes | Unique identifier (e.g., `"My Custom Hash"`) |
-| `description` | `string` | Yes | Human-readable description |
-| `pattern` | `string` | Yes | Regex pattern to match against input |
-| `detection_type` | `string` | Yes | One of: `"Hash"`, `"Encoding"`, `"Cipher"`, `"Stego"` |
-| `confidence_weight` | `number` | Yes | Base confidence (0.0 – 1.0) |
-| `common_name` | `string\|null` | No | Friendly name (e.g., `"MD5"`) |
-| `hashcat_mode` | `number\|null` | No | Hashcat mode number for cracking |
-| `john_format` | `string\|null` | No | John the Ripper format string |
-| `security_rating` | `string\|null` | No | One of: `"Secure"`, `"Weak"`, `"Broken"`, `"Insecure"` |
-| `compliance_refs` | `string[]` | Yes | Compliance standards (e.g., `["PCI DSS 4.0"]`) |
-| `parameters` | `string[]` | Yes | Named capture groups in the regex pattern |
+---
 
-**Example `~/.hashendra/signatures.json`:**
+## Custom Signatures
+
+Create `~/.hashendra/signatures.json` with an array of signature objects:
+
 ```json
 [
   {
@@ -674,41 +591,28 @@ Yes. Create a file at `~/.hashendra/signatures.json` with an array of signature 
     "security_rating": "Secure",
     "compliance_refs": [],
     "parameters": []
-  },
-  {
-    "name": "Internal Hash v2",
-    "description": "Custom salted hash used by internal systems",
-    "pattern": "^\\$INT\\$(?P<salt>[a-f0-9]{16})\\$(?P<hash>[a-f0-9]{64})$",
-    "detection_type": "Hash",
-    "confidence_weight": 0.90,
-    "common_name": "Internal Salted SHA-256",
-    "hashcat_mode": null,
-    "john_format": null,
-    "security_rating": "Weak",
-    "compliance_refs": ["NIST SP 800-131A"],
-    "parameters": ["salt", "hash"]
   }
 ]
 ```
 
-Named capture groups in `pattern` (e.g., `(?P<salt>...)`) are automatically extracted and displayed as parameters in the output.
+Invalid regex patterns are reported at startup with the error message — the app continues without the broken signature.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Areas where help is especially appreciated:
-
+Contributions welcome! Areas of interest:
 - **New cipher crackers** — Polybius, Four-Square, ADFGVX
 - **Rolling XOR detection** — identifying XOR with incrementing keys
 - **Block cipher mode identification** — ECB vs CBC pattern detection
-- **Weak key detection** — identifying DES weak/semi-weak keys
+- **Weak key detection** — DES weak/semi-weak keys
 - **Progress tree visualization** — showing the full decode tree graphically
+- **Additional forensic filesystems** — ZFS, APFS, HFS+ deep recovery
 
-Please feel free to submit a Pull Request.
+Submit a Pull Request on [GitHub](https://github.com/meshackbahati/HashEndra).
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT License — see the [LICENSE](LICENSE) file for details.

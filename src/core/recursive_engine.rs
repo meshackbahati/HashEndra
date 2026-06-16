@@ -1,5 +1,8 @@
+use crate::core::scanner::{
+    decode_ascii85, decode_base32, decode_base58, decode_base64, decode_binary, decode_hex,
+    decode_html_entities, decode_morse, decode_octal, decode_quoted_printable, decode_url,
+};
 use std::sync::{Arc, Mutex};
-use crate::core::scanner::{decode_base64, decode_hex, decode_url, decode_base32};
 
 #[derive(Debug, Clone)]
 pub struct DecodeStep {
@@ -52,7 +55,8 @@ impl RecursiveEngine {
             }
 
             // Follow the highest-confidence candidate at each layer.
-            let best = next_candidates.into_iter()
+            let best = next_candidates
+                .into_iter()
                 .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
                 .unwrap();
 
@@ -65,6 +69,10 @@ impl RecursiveEngine {
                 break; // Cycle detected
             }
             hist.push(current.clone());
+
+            if self.should_stop_on_result(&current) {
+                break;
+            }
         }
 
         DecodeResult {
@@ -131,13 +139,118 @@ impl RecursiveEngine {
             }
         }
 
+        if let Some(dec) = decode_base58(input) {
+            if let Ok(s) = String::from_utf8(dec) {
+                if self.is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Base58".to_string(),
+                        result: s,
+                        confidence: 0.85,
+                    });
+                }
+            }
+        }
+
+        if let Some(dec) = decode_binary(input) {
+            if let Ok(s) = String::from_utf8(dec) {
+                if self.is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Binary".to_string(),
+                        result: s,
+                        confidence: 0.95,
+                    });
+                }
+            }
+        }
+
+        if let Some(dec) = decode_octal(input) {
+            if let Ok(s) = String::from_utf8(dec) {
+                if self.is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Octal".to_string(),
+                        result: s,
+                        confidence: 0.95,
+                    });
+                }
+            }
+        }
+
+        if let Some(dec) = decode_ascii85(input) {
+            if let Ok(s) = String::from_utf8(dec) {
+                if self.is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Ascii85".to_string(),
+                        result: s,
+                        confidence: 0.95,
+                    });
+                }
+            }
+        }
+
+        if let Some(dec) = decode_quoted_printable(input) {
+            if let Ok(s) = String::from_utf8(dec) {
+                if self.is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Quoted-Printable".to_string(),
+                        result: s,
+                        confidence: 0.90,
+                    });
+                }
+            }
+        }
+
+        if let Some(dec) = decode_html_entities(input) {
+            if self.is_valid_plaintext(&dec) {
+                candidates.push(DecodeStep {
+                    layer: depth,
+                    decoder: "HTML Entities".to_string(),
+                    result: dec,
+                    confidence: 0.90,
+                });
+            }
+        }
+
+        if let Some(dec) = decode_morse(input) {
+            if self.is_valid_plaintext(&dec) {
+                candidates.push(DecodeStep {
+                    layer: depth,
+                    decoder: "Morse".to_string(),
+                    result: dec,
+                    confidence: 0.90,
+                });
+            }
+        }
+
+        if input
+            .chars()
+            .all(|c| matches!(c, 'A' | 'B' | 'a' | 'b' | ' ' | '\t' | '\n'))
+        {
+            use crate::detectors::classic_ciphers::bacon_decode;
+
+            if let Some(dec) = bacon_decode(input, 'A', 'B') {
+                if self.is_valid_plaintext(&dec) && dec != input {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Baconian".to_string(),
+                        result: dec,
+                        confidence: 0.80,
+                    });
+                }
+            }
+        }
+
         // --- Cheap monoalphabetic crackers (always try) ---
         // Caesar/ROT and Atbash are O(26) and IoC-preserving, so we try them
         // unconditionally. We keep the result only if it's strictly better
         // than the input (lower Chi-Squared score).
         // Skip if input already contains spaces (clear plaintext indicator).
         if !input.contains(' ') {
-            use crate::detectors::classic_ciphers::{caesar_auto_crack, atbash_decode};
+            use crate::detectors::classic_ciphers::{atbash_decode, caesar_auto_crack};
 
             let input_chi = crate::core::cryptanalysis::chi_squared_score(input);
             let (_, caesar_res, caesar_score) = caesar_auto_crack(input);
@@ -169,7 +282,7 @@ impl RecursiveEngine {
         // Only apply these if the input looks like ciphertext.
         if self.is_likely_ciphertext(input) {
             use crate::detectors::classic_ciphers::{
-                vigenere_auto_crack, rail_fence_auto_crack, affine_auto_crack,
+                affine_auto_crack, columnar_auto_crack, rail_fence_auto_crack, vigenere_auto_crack,
             };
 
             // Vigenere
@@ -204,21 +317,51 @@ impl RecursiveEngine {
                     confidence: 0.65,
                 });
             }
+
+            // Columnar Transposition
+            let (_, columnar_res, columnar_score) = columnar_auto_crack(input);
+            if columnar_score < 55.0 && columnar_res != input {
+                candidates.push(DecodeStep {
+                    layer: depth,
+                    decoder: "Columnar".to_string(),
+                    result: columnar_res,
+                    confidence: 0.60,
+                });
+            }
         }
 
         // Multi-byte XOR (only attempt on hex-like or raw input)
-        if let Ok(input_bytes) = hex::decode(input)
-            .or_else(|_| Ok::<Vec<u8>, ()>(input.as_bytes().to_vec()))
+        if let Ok(input_bytes) =
+            hex::decode(input).or_else(|_| Ok::<Vec<u8>, ()>(input.as_bytes().to_vec()))
         {
+            let single_byte = crate::core::scanner::xor_crack(&input_bytes)
+                .into_iter()
+                .find(|(_, decoded, score)| {
+                    *score > 0.85
+                        && self.is_meaningful_plaintext_candidate(decoded)
+                        && decoded != input
+                });
+            if let Some((_, xor_res, xor_score)) = single_byte {
+                candidates.push(DecodeStep {
+                    layer: depth,
+                    decoder: "XOR (Single-byte)".to_string(),
+                    result: xor_res,
+                    confidence: (xor_score as f32).min(0.72),
+                });
+            }
+
             if let Some((_, xor_res, xor_score)) =
                 crate::core::cryptanalysis::multi_byte_xor_crack(&input_bytes)
             {
-                if xor_score > 0.8 && xor_res != input {
+                if xor_score > 0.8
+                    && self.is_meaningful_plaintext_candidate(&xor_res)
+                    && xor_res != input
+                {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "XOR (Multi-byte)".to_string(),
                         result: xor_res,
-                        confidence: xor_score,
+                        confidence: xor_score.min(0.78),
                     });
                 }
             }
@@ -231,29 +374,37 @@ impl RecursiveEngine {
     /// (no spaces, no common English words, long enough to be worth cracking).
     fn is_likely_ciphertext(&self, input: &str) -> bool {
         // Too short to be meaningful ciphertext
-        if input.len() < 8 { return false; }
+        if input.len() < 8 {
+            return false;
+        }
 
         // Spaces are a strong indicator of plaintext
-        if input.contains(' ') { return false; }
+        if input.contains(' ') {
+            return false;
+        }
 
         // Common English words in the lowercase version indicate plaintext
         let lower = input.to_lowercase();
         let plaintext_markers = ["the", "and", "for", "you", "are", "hello", "world", "flag"];
         for marker in &plaintext_markers {
-            if lower.contains(marker) { return false; }
+            if lower.contains(marker) {
+                return false;
+            }
         }
 
         // If it contains braces with readable content inside, it's likely a decoded flag
         if let (Some(open), Some(close)) = (input.find('{'), input.rfind('}')) {
             if open < close {
-                let inside = &input[open+1..close];
+                let inside = &input[open + 1..close];
                 // If the inside contains spaces or common words, it's decoded
                 if inside.contains(' ') {
                     return false;
                 }
                 let inside_lower = inside.to_lowercase();
                 for marker in &plaintext_markers {
-                    if inside_lower.contains(marker) { return false; }
+                    if inside_lower.contains(marker) {
+                        return false;
+                    }
                 }
             }
         }
@@ -306,5 +457,37 @@ impl RecursiveEngine {
         s.len() >= 3
             && s.chars()
                 .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+    }
+
+    fn should_stop_on_result(&self, s: &str) -> bool {
+        let lower = s.to_lowercase();
+        let markers = ["the", "and", "hello", "world", "flag", "json", "http"];
+        self.is_meaningful_plaintext_candidate(s)
+            && (s.contains(' ')
+                || crate::core::cryptanalysis::contains_english_patterns(&lower) > 0.08
+                || markers.iter().any(|marker| lower.contains(marker)))
+    }
+
+    fn is_meaningful_plaintext_candidate(&self, s: &str) -> bool {
+        if !self.is_valid_plaintext(s) {
+            return false;
+        }
+
+        let alpha_count = s.chars().filter(|c| c.is_ascii_alphabetic()).count();
+        let lower = s.to_lowercase();
+        let english_markers = [
+            "the", "and", "ing", "ion", "hello", "world", "flag", "http", "json",
+        ];
+        let english_like = crate::core::cryptanalysis::contains_english_patterns(&lower) > 0.08
+            || english_markers.iter().any(|marker| lower.contains(marker));
+
+        (alpha_count >= 4 && english_like)
+            || s.starts_with('{')
+            || s.starts_with('[')
+            || s.starts_with("<?xml")
+            || s.contains("://")
+            || (s.chars().any(|c| c.is_ascii_alphabetic())
+                && s.chars().any(|c| c.is_ascii_digit())
+                && (s.contains('{') || s.contains('_')))
     }
 }

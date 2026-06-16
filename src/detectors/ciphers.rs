@@ -1,4 +1,4 @@
-use crate::core::patterns::{Signature, DetectionType};
+use crate::core::patterns::{DetectionType, Signature};
 
 pub fn get_cipher_signatures() -> Vec<Signature> {
     vec![
