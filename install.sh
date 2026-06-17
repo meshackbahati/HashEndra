@@ -13,7 +13,7 @@
 #   --prefix DIR    Install binary to DIR/bin (default: /usr/local)
 #   --uninstall     Remove HashEndra binary and exit
 
-set -euo pipefail
+set -eo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -99,16 +99,19 @@ INSTALL_PREFIX="${INSTALL_PREFIX:-$DEFAULT_PREFIX}"
 INSTALL_DIR="$INSTALL_PREFIX/bin"
 
 # ----- Locate source directory -------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR=""
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != bash ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+fi
 IN_REPO=false
-if [[ -f "$SCRIPT_DIR/Cargo.toml" ]] && grep -q 'name = "hashendra"' "$SCRIPT_DIR/Cargo.toml" 2>/dev/null; then
+if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/Cargo.toml" ]] && grep -q 'name = "hashendra"' "$SCRIPT_DIR/Cargo.toml" 2>/dev/null; then
     IN_REPO=true
     REPO_DIR="$SCRIPT_DIR"
 fi
 
 TEMP_DIR=""
 if ! $IN_REPO; then
-    echo -e "${BLUE}[*] Not inside the repository. Cloning from GitHub...${NC}"
+    echo -e "${BLUE}[*] Cloning from GitHub...${NC}"
     if ! command -v git &>/dev/null; then
         echo -e "${RED}[!] Git is required. Please install git first.${NC}"
         exit 1
