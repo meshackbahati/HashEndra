@@ -1,5 +1,6 @@
 pub mod cryptanalysis;
 pub mod encoder;
+pub(crate) mod engine_rules;
 pub mod entropy;
 pub mod hasher;
 pub mod patterns;

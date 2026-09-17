@@ -2,6 +2,10 @@ use crate::core::scanner::{
     decode_ascii85, decode_base32, decode_base58, decode_base64, decode_binary, decode_hex,
     decode_html_entities, decode_morse, decode_octal, decode_quoted_printable, decode_url,
 };
+use super::engine_rules::{
+    is_likely_ciphertext, is_meaningful_plaintext_candidate, is_valid_plaintext,
+    should_stop_on_result, xor_result_beats_input,
+};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -77,7 +81,7 @@ impl RecursiveEngine {
             }
             hist.push(current.clone());
 
-            if self.should_stop_on_result(&current) {
+            if should_stop_on_result(&current) {
                 confident_stop = true;
                 break;
             }
@@ -100,7 +104,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_hex(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Hex".to_string(),
@@ -111,7 +115,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_base64(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Base64".to_string(),
@@ -132,7 +136,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_base32(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Base32".to_string(),
@@ -143,7 +147,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_base58(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Base58".to_string(),
@@ -154,7 +158,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_binary(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Binary".to_string(),
@@ -165,7 +169,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_octal(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Octal".to_string(),
@@ -176,7 +180,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_ascii85(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Ascii85".to_string(),
@@ -187,7 +191,7 @@ impl RecursiveEngine {
 
         if let Some(dec) = decode_quoted_printable(input)
             && let Ok(s) = String::from_utf8(dec)
-                && self.is_valid_plaintext(&s) {
+                && is_valid_plaintext(&s) {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Quoted-Printable".to_string(),
@@ -197,7 +201,7 @@ impl RecursiveEngine {
                 }
 
         if let Some(dec) = decode_html_entities(input)
-            && self.is_valid_plaintext(&dec) {
+            && is_valid_plaintext(&dec) {
                 candidates.push(DecodeStep {
                     layer: depth,
                     decoder: "HTML Entities".to_string(),
@@ -207,7 +211,7 @@ impl RecursiveEngine {
             }
 
         if let Some(dec) = decode_morse(input)
-            && self.is_valid_plaintext(&dec) {
+            && is_valid_plaintext(&dec) {
                 candidates.push(DecodeStep {
                     layer: depth,
                     decoder: "Morse".to_string(),
@@ -223,7 +227,7 @@ impl RecursiveEngine {
             use crate::detectors::classic_ciphers::bacon_decode;
 
             if let Some(dec) = bacon_decode(input, 'A', 'B')
-                && self.is_valid_plaintext(&dec) && dec != input {
+                && is_valid_plaintext(&dec) && dec != input {
                     candidates.push(DecodeStep {
                         layer: depth,
                         decoder: "Baconian".to_string(),
@@ -240,7 +244,7 @@ impl RecursiveEngine {
         // Skip only if the input already reads as finished plaintext —
         // a spaced-out sentence like "Hello World" must not gain a layer,
         // but spaced *ciphertext* ("Uryyb Jbeyq") still gets cracked.
-        if !self.should_stop_on_result(input) {
+        if !should_stop_on_result(input) {
             use crate::core::cryptanalysis::chi_squared_score;
             use crate::core::scanner::rot_brute_force;
             use crate::detectors::classic_ciphers::atbash_decode;
@@ -264,7 +268,7 @@ impl RecursiveEngine {
             // containing real markers ("hello", "flag", spaces) is evidence.
             let pick = shifts
                 .iter()
-                .find(|(_, decoded)| self.should_stop_on_result(decoded))
+                .find(|(_, decoded)| should_stop_on_result(decoded))
                 .or_else(|| shifts.first());
             if let Some((_, caesar_res)) = pick {
                 candidates.push(DecodeStep {
@@ -276,7 +280,7 @@ impl RecursiveEngine {
             }
 
             let atbash_res = atbash_decode(input);
-            if self.is_valid_plaintext(&atbash_res) && atbash_res != input {
+            if is_valid_plaintext(&atbash_res) && atbash_res != input {
                 let atbash_chi = crate::core::cryptanalysis::chi_squared_score(&atbash_res);
                 if atbash_chi < input_chi * 0.8 {
                     candidates.push(DecodeStep {
@@ -296,7 +300,7 @@ impl RecursiveEngine {
         // results that strictly beat the input's own Chi-Squared score.
         // Absolute thresholds are meaningless across lengths; a crack must
         // make the text look *more* English, not just hit a magic number.
-        if self.is_likely_ciphertext(input) {
+        if is_likely_ciphertext(input) {
             use crate::detectors::classic_ciphers::{
                 affine_auto_crack, columnar_auto_crack, rail_fence_auto_crack, vigenere_auto_crack,
             };
@@ -360,9 +364,9 @@ impl RecursiveEngine {
                 .into_iter()
                 .find(|(_, decoded, score)| {
                     *score > 0.85
-                        && self.is_meaningful_plaintext_candidate(decoded)
+                        && is_meaningful_plaintext_candidate(decoded)
                         && decoded != input
-                        && Self::xor_result_beats_input(decoded, input_chi)
+                        && xor_result_beats_input(decoded, input_chi)
                 });
             if let Some((_, xor_res, xor_score)) = single_byte {
                 candidates.push(DecodeStep {
@@ -376,9 +380,9 @@ impl RecursiveEngine {
             if let Some((_, xor_res, xor_score)) =
                 crate::core::cryptanalysis::multi_byte_xor_crack(&input_bytes)
                 && xor_score > 0.8
-                    && self.is_meaningful_plaintext_candidate(&xor_res)
+                    && is_meaningful_plaintext_candidate(&xor_res)
                     && xor_res != input
-                    && Self::xor_result_beats_input(&xor_res, input_chi)
+                    && xor_result_beats_input(&xor_res, input_chi)
                 {
                     candidates.push(DecodeStep {
                         layer: depth,
@@ -392,191 +396,8 @@ impl RecursiveEngine {
         candidates
     }
 
-    /// Heuristic: returns true if the input looks like it could be ciphertext
-    /// (no spaces, no common English words, long enough to be worth cracking).
-    fn is_likely_ciphertext(&self, input: &str) -> bool {
-        // Too short to be meaningful ciphertext
-        if input.len() < 8 {
-            return false;
-        }
-
-        // Spaces are a strong indicator of plaintext
-        if input.contains(' ') {
-            return false;
-        }
-
-        // Statistical crackers need letters to work with. Digit-heavy
-        // strings (hex digests, counters) produce noise, not cracks.
-        let alpha_count = input.chars().filter(|c| c.is_ascii_alphabetic()).count();
-        if alpha_count < 8 {
-            return false;
-        }
-        if alpha_count * 5 < input.len() * 2 {
-            // fewer than 40% alphabetic
-            return false;
-        }
-
-        // Common English words in the lowercase version indicate plaintext
-        let lower = input.to_lowercase();
-        let plaintext_markers = ["the", "and", "for", "you", "are", "hello", "world", "flag"];
-        for marker in &plaintext_markers {
-            if lower.contains(marker) {
-                return false;
-            }
-        }
-
-        // If it contains braces with readable content inside, it's likely a decoded flag
-        if let (Some(open), Some(close)) = (input.find('{'), input.rfind('}'))
-            && open < close {
-                let inside = &input[open + 1..close];
-                // If the inside contains spaces or common words, it's decoded
-                if inside.contains(' ') {
-                    return false;
-                }
-                let inside_lower = inside.to_lowercase();
-                for marker in &plaintext_markers {
-                    if inside_lower.contains(marker) {
-                        return false;
-                    }
-                }
-            }
-
-        // Use IoC to check if text already has English-like letter distribution.
-        // English IoC is ~0.065; random/cipher text is ~0.038.
-        // If IoC > 0.055, it's likely already plaintext.
-        let alpha_only: String = input.chars().filter(|c| c.is_ascii_alphabetic()).collect();
-        if alpha_only.len() >= 10 {
-            let ioc = crate::core::cryptanalysis::calculate_ioc(&alpha_only);
-            if ioc > 0.055 {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Validates whether a decoded string looks like plausible plaintext
-    /// or a recognized binary format (JSON, XML, Gzip, PE, ELF).
-    fn is_valid_plaintext(&self, s: &str) -> bool {
-        let bytes = s.as_bytes();
-
-        // Structured text formats
-        if s.starts_with('{') || s.starts_with('[') || s.starts_with("<?xml") {
-            return true;
-        }
-
-        // Gzip magic: 1f 8b
-        if bytes.len() > 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
-            return true;
-        }
-
-        // PE magic: MZ
-        if bytes.len() > 2 && bytes[0] == b'M' && bytes[1] == b'Z' {
-            return true;
-        }
-
-        // ELF magic: 7f 45 4c 46
-        if bytes.len() > 4
-            && bytes[0] == 0x7f
-            && bytes[1] == b'E'
-            && bytes[2] == b'L'
-            && bytes[3] == b'F'
-        {
-            return true;
-        }
-
-        // Fallback: printable ASCII with minimum length
-        s.len() >= 3
-            && s.chars()
-                .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
-    }
-
-    /// XOR acceptance rule: printable-ratio alone admits garbage on short
-    /// inputs, so the result must also read as English (absolute bar) and
-    /// read *more* English than the input (relative bar).
-    fn xor_result_beats_input(decoded: &str, input_chi: f32) -> bool {
-        let chi = crate::core::cryptanalysis::chi_squared_score(decoded);
-        chi < 150.0 && chi < input_chi
-    }
-
-    fn should_stop_on_result(&self, s: &str) -> bool {
-        let lower = s.to_lowercase();
-        let markers = ["the", "and", "hello", "world", "flag", "json", "http"];
-        self.is_meaningful_plaintext_candidate(s)
-            && (s.contains(' ')
-                || crate::core::cryptanalysis::contains_english_patterns(&lower) > 0.08
-                || markers.iter().any(|marker| lower.contains(marker)))
-    }
-
-    fn is_meaningful_plaintext_candidate(&self, s: &str) -> bool {
-        if !self.is_valid_plaintext(s) {
-            return false;
-        }
-
-        let alpha_count = s.chars().filter(|c| c.is_ascii_alphabetic()).count();
-        let lower = s.to_lowercase();
-        let english_markers = [
-            "the", "and", "ing", "ion", "hello", "world", "flag", "http", "json",
-        ];
-        let english_like = crate::core::cryptanalysis::contains_english_patterns(&lower) > 0.08
-            || english_markers.iter().any(|marker| lower.contains(marker));
-
-        (alpha_count >= 4 && english_like)
-            || s.starts_with('{')
-            || s.starts_with('[')
-            || s.starts_with("<?xml")
-            || s.contains("://")
-            || ((s.contains('{') || s.contains('_')) && english_like)
-    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn single_base64_layer_reaches_confident_stop() {
-        let engine = RecursiveEngine::new(10);
-        let result = engine.explore_paths("SGVsbG8gV29ybGQ=");
-        assert_eq!(result.final_result, "Hello World");
-        assert!(result.confident_stop);
-    }
-
-    #[test]
-    fn hex_looking_garbage_is_left_alone() {
-        // Regression test: statistical crackers used to "decode" digit-heavy
-        // strings into garbage and report success.
-        let engine = RecursiveEngine::new(10);
-        let result = engine.explore_paths("72368696d696e");
-        assert_eq!(result.final_result, "72368696d696e");
-        assert_eq!(result.layers_unwrapped, 0);
-        assert!(!result.confident_stop);
-    }
-
-    #[test]
-    fn rot13_flag_unwraps_to_plaintext() {
-        let engine = RecursiveEngine::new(10);
-        let result = engine.explore_paths("synt{Mx_zr_nyrqvn}");
-        assert_eq!(result.final_result, "flag{Zk_me_aledia}");
-        assert!(result.confident_stop);
-    }
-
-    #[test]
-    fn spaced_rot13_decodes_end_to_end() {
-        let engine = RecursiveEngine::new(10);
-        let result = engine.explore_paths("Gur dhvpx oebja sbk whzcf bire gur ynml qbt");
-        assert_eq!(
-            result.final_result,
-            "The quick brown fox jumps over the lazy dog"
-        );
-        assert!(result.confident_stop);
-    }
-
-    #[test]
-    fn plain_english_gains_no_layers() {
-        let engine = RecursiveEngine::new(10);
-        let result = engine.explore_paths("Hello World, this is plain English text");
-        assert_eq!(result.layers_unwrapped, 0);
-        assert!(!result.confident_stop);
-    }
-}
+#[path = "recursive_engine_tests.rs"]
+mod tests;
