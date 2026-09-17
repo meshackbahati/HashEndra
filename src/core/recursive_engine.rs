@@ -301,9 +301,8 @@ impl RecursiveEngine {
         // Absolute thresholds are meaningless across lengths; a crack must
         // make the text look *more* English, not just hit a magic number.
         if is_likely_ciphertext(input) {
-            use crate::detectors::classic_ciphers::{
-                affine_auto_crack, columnar_auto_crack, rail_fence_auto_crack, vigenere_auto_crack,
-            };
+            use crate::detectors::classic_ciphers::{affine_auto_crack, vigenere_auto_crack};
+            use crate::detectors::classic_transposition::{columnar_auto_crack, rail_fence_auto_crack};
             use crate::core::cryptanalysis::chi_squared_score;
 
             let input_chi = chi_squared_score(input);
