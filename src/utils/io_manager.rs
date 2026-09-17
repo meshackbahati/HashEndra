@@ -12,6 +12,12 @@ pub struct FileManager {
     path: Option<PathBuf>,
 }
 
+impl Default for FileManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileManager {
     pub fn new() -> Self {
         Self {

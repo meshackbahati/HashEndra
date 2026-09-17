@@ -805,7 +805,7 @@ fn format_guid(bytes: &[u8]) -> String {
 
 fn decode_gpt_name(bytes: &[u8]) -> Option<String> {
     let mut values = Vec::new();
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0 {
         let value = u16::from_le_bytes([chunk[0], chunk[1]]);
         if value == 0 {
             break;

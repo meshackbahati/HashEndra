@@ -80,7 +80,7 @@ pub fn detect_charset(input: &str) -> Charset {
     let is_base64 = input
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=');
-    let is_ascii = input.chars().all(|c| c.is_ascii());
+    let is_ascii = input.is_ascii();
 
     // Order matters: more specific checks before general ones.
     // Base32 before Base58 because Base32 (A-Z,2-7) is a subset of Base58.
@@ -111,11 +111,13 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
 
     let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
-    for i in 0..=a_len {
-        matrix[i][0] = i;
+    for (i, row) in matrix.iter_mut().enumerate() {
+        row[0] = i;
     }
-    for j in 0..=b_len {
-        matrix[0][j] = j;
+    if let Some(first) = matrix.first_mut() {
+        for (j, cell) in first.iter_mut().enumerate() {
+            *cell = j;
+        }
     }
 
     for i in 1..=a_len {
@@ -268,14 +270,13 @@ pub fn score_detection(input: &str, sig: &Signature, context: &ScanningContext) 
                 score *= 1.3; // Database dump context
             }
         }
-        ScanningContext::Blockchain => {
-            if sig.name.contains("Bitcoin")
+        ScanningContext::Blockchain
+            if (sig.name.contains("Bitcoin")
                 || sig.name.contains("Electrum")
-                || sig.name == "Base58Check"
-            {
+                || sig.name == "Base58Check")
+            => {
                 score *= 1.5;
             }
-        }
         _ => {}
     }
 
@@ -318,7 +319,7 @@ pub fn score_detection(input: &str, sig: &Signature, context: &ScanningContext) 
         }
         DetectionType::Encoding => match sig.name.as_str() {
             "Hex" => {
-                if input.len() % 2 != 0 {
+                if !input.len().is_multiple_of(2) {
                     score *= 0.4;
                 }
 
@@ -377,7 +378,7 @@ pub fn score_detection(input: &str, sig: &Signature, context: &ScanningContext) 
                 if input.len() < 12 {
                     score *= 0.4;
                 }
-                if input.chars().all(|c| c.is_ascii_hexdigit()) && input.len() % 2 == 0 {
+                if input.chars().all(|c| c.is_ascii_hexdigit()) && input.len().is_multiple_of(2) {
                     score *= 0.08;
                 }
 
@@ -520,14 +521,12 @@ pub fn preprocess_input(input: &str) -> String {
         return trimmed.to_string();
     }
 
-    let mut cleaned = trimmed.replace('\n', "").replace('\r', "");
+    let mut cleaned = trimmed.replace(['\n', '\r'], "");
 
     // Only strip spaces and delimiters if the remaining chars are hex/base64-like
     let no_space = cleaned.replace(' ', "");
     let stripped = no_space
-        .replace(':', "")
-        .replace('-', "")
-        .replace('.', "");
+        .replace([':', '-', '.'], "");
 
     let is_hash_like = stripped.len() >= 8
         && stripped
@@ -545,7 +544,7 @@ pub fn preprocess_input(input: &str) -> String {
         }
 
         // Fix Base64 padding
-        if cleaned.len() % 4 != 0
+        if !cleaned.len().is_multiple_of(4)
             && cleaned
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/')
@@ -683,7 +682,7 @@ fn decode_base64_generic(input: &str, url_safe: bool) -> Option<Vec<u8>> {
             2 | 3 => normalized.push_str(&"=".repeat(4 - (normalized.len() % 4))),
             _ => return None,
         }
-    } else if normalized.len() % 4 != 0 {
+    } else if !normalized.len().is_multiple_of(4) {
         return None;
     }
 
@@ -748,7 +747,7 @@ pub fn decode_hex(input: &str) -> Option<Vec<u8>> {
     if normalized != input || input.chars().any(|c| c.is_ascii_whitespace()) {
         let joined: String = normalized.split_whitespace().collect();
         if joined.is_empty()
-            || joined.len() % 2 != 0
+            || !joined.len().is_multiple_of(2)
             || !joined.chars().all(|c| c.is_ascii_hexdigit())
         {
             return None;
@@ -756,7 +755,7 @@ pub fn decode_hex(input: &str) -> Option<Vec<u8>> {
         return decode_hex(&joined);
     }
 
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return None;
     }
 
@@ -808,7 +807,7 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
         .chars()
         .filter(|c| !c.is_ascii_whitespace())
         .collect();
-    if bits.is_empty() || bits.len() % 8 != 0 || !bits.chars().all(|c| c == '0' || c == '1') {
+    if bits.is_empty() || !bits.len().is_multiple_of(8) || !bits.chars().all(|c| c == '0' || c == '1') {
         return None;
     }
 
@@ -847,7 +846,7 @@ pub fn decode_octal(input: &str) -> Option<Vec<u8>> {
             .split_whitespace()
             .map(|group| group.to_string())
             .collect()
-    } else if compact.len() % 3 == 0 {
+    } else if compact.len().is_multiple_of(3) {
         compact
             .as_bytes()
             .chunks(3)
@@ -880,8 +879,8 @@ pub fn decode_ascii85(input: &str) -> Option<Vec<u8>> {
     // Strip optional Adobe delimiters
     let body = if trimmed.starts_with("<~") && trimmed.ends_with("~>") {
         &trimmed[2..trimmed.len().saturating_sub(2)]
-    } else if trimmed.starts_with("<~") {
-        &trimmed[2..]
+    } else if let Some(rest) = trimmed.strip_prefix("<~") {
+        rest
     } else {
         trimmed
     };
@@ -1101,11 +1100,11 @@ pub fn decode_base32(input: &str) -> Option<Vec<u8>> {
     let mut result = Vec::new();
 
     for &b in input.as_bytes() {
-        let val = if b >= b'A' && b <= b'Z' {
+        let val = if b.is_ascii_uppercase() {
             (b - b'A') as u32
-        } else if b >= b'2' && b <= b'7' {
+        } else if (b'2'..=b'7').contains(&b) {
             (b - b'2' + 26) as u32
-        } else if b >= b'a' && b <= b'z' {
+        } else if b.is_ascii_lowercase() {
             (b - b'a') as u32
         } else {
             return None;
@@ -1144,10 +1143,9 @@ pub fn decode_base58(input: &str) -> Option<Vec<u8>> {
     let b58_base = BigUint::from(58u32);
 
     for &b in input.as_bytes() {
-        if let Some(pos) = alphabet.iter().position(|&x| x == b) {
+        {
+            let pos = alphabet.iter().position(|&x| x == b)?;
             value = value * &b58_base + BigUint::from(pos);
-        } else {
-            return None;
         }
     }
 
@@ -1202,13 +1200,12 @@ pub fn xor_crack(input: &[u8]) -> Vec<(u8, String, f64)> {
             .count();
         let score = printable as f64 / xored.len() as f64;
 
-        if score > 0.8 {
-            if let Ok(s) = String::from_utf8(xored) {
+        if score > 0.8
+            && let Ok(s) = String::from_utf8(xored) {
                 results.push((key, s, score));
             }
-        }
     }
-    results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+    results.sort_by(|a, b| b.2.total_cmp(&a.2));
     results
 }
 
@@ -1290,7 +1287,7 @@ pub fn rail_fence_encrypt(input: &str, rails: usize) -> String {
         if down {
             if row + 1 >= rails {
                 down = false;
-                if row > 0 { row -= 1; }
+                row = row.saturating_sub(1);
             } else {
                 row += 1;
             }
@@ -1322,7 +1319,7 @@ pub fn columnar_encrypt(input: &str, key: &str) -> String {
     }
     let chars: Vec<char> = input.chars().collect();
     let cols = key.len();
-    let rows = (chars.len() + cols - 1) / cols;
+    let rows = chars.len().div_ceil(cols);
     let mut grid = vec![vec![' '; cols]; rows];
 
     for (i, &c) in chars.iter().enumerate() {
@@ -1335,11 +1332,11 @@ pub fn columnar_encrypt(input: &str, key: &str) -> String {
 
     let mut result = String::with_capacity(chars.len());
     for &(col, _) in &col_order {
-        for row in 0..rows {
-            if grid[row][col] != ' ' || row * cols + col < chars.len() {
-                result.push(grid[row][col]);
-            }
+    for (row, grid_row) in grid.iter().enumerate() {
+        if grid_row[col] != ' ' || row * cols + col < chars.len() {
+            result.push(grid_row[col]);
         }
+    }
     }
     result
 }

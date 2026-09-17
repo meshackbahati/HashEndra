@@ -32,6 +32,10 @@ impl BytePattern {
         self.bytes.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
+
     pub fn matches_at(&self, data: &[u8], offset: usize) -> bool {
         let Some(window) = data.get(offset..offset.saturating_add(self.bytes.len())) else {
             return false;
@@ -623,7 +627,7 @@ pub fn carve_path(
                 .iter()
                 .filter_map(|artifact| artifact.extracted_path.as_deref())
                 .map(PathBuf::from)
-                .chain(nested_paths.into_iter())
+                .chain(nested_paths)
             {
                 if nested.is_file() {
                     pending.push((nested, depth + 1));
@@ -711,7 +715,7 @@ fn scan_profiles(data: &[u8], profiles: &[CarveProfile], quick: bool) -> Vec<Pro
         .flat_map(|(profile_index, profile)| {
             let mut profile_matches = Vec::new();
             for header in &profile.headers {
-                if header.len() == 0 || header.len() > local_data.len() {
+                if header.is_empty() || header.len() > local_data.len() {
                     continue;
                 }
                 let max_offset = local_data.len() - header.len();
@@ -772,11 +776,10 @@ fn determine_slice_end(
     }
 
     // Priority 3: footer pattern match
-    if let Some(footer) = &profile.footer {
-        if let Some(end) = find_pattern(data, current.offset + current.header_len, footer) {
+    if let Some(footer) = &profile.footer
+        && let Some(end) = find_pattern(data, current.offset + current.header_len, footer) {
             return end.saturating_add(footer.len()).min(data.len());
         }
-    }
 
     // Priority 4: next match boundary or max_size cap
     let next_offset = matches
@@ -892,7 +895,7 @@ fn matches_type_filters(profile: &CarveProfile, filters: &BTreeSet<String>) -> b
 }
 
 fn find_pattern(data: &[u8], start: usize, pattern: &BytePattern) -> Option<usize> {
-    if pattern.len() == 0 || start >= data.len() || pattern.len() > data.len().saturating_sub(start)
+    if pattern.is_empty() || start >= data.len() || pattern.len() > data.len().saturating_sub(start)
     {
         return None;
     }

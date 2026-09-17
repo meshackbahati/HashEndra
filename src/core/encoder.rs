@@ -46,7 +46,7 @@ pub fn encode_base32(data: &[u8]) -> String {
     }
 
     // Pad to multiple of 8
-    while output.len() % 8 != 0 {
+    while !output.len().is_multiple_of(8) {
         output.push('=');
     }
 
@@ -117,15 +117,21 @@ pub fn encode_html(input: &str) -> String {
 }
 
 /// Encodes input bytes to Quoted-Printable.
+///
+/// Printable ASCII (except `=`) passes through; everything else becomes
+/// `=XX`. Lines wrap with soft breaks past 73 columns.
+///
+/// ```
+/// use hashendra::core::encoder::encode_quoted_printable;
+/// assert_eq!(encode_quoted_printable(b"Hello"), "Hello");
+/// assert_eq!(encode_quoted_printable(b"a=b"), "a=3Db");
+/// ```
 pub fn encode_quoted_printable(data: &[u8]) -> String {
     let mut output = String::new();
     let mut line_len = 0usize;
 
     for &b in data {
-        if b == b' ' || b == b'\t' {
-            output.push(b as char);
-            line_len += 1;
-        } else if b.is_ascii_graphic() && b != b'=' {
+        if (b == b' ' || b == b'\t') || (b.is_ascii_graphic() && b != b'=') {
             output.push(b as char);
             line_len += 1;
         } else if b == b'\n' {

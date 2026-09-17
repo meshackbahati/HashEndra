@@ -7,22 +7,18 @@ pub fn extract_printable_strings(data: &[u8], min_len: usize) -> Vec<(usize, Str
             if chunk_start.is_none() {
                 chunk_start = Some(idx);
             }
-        } else if let Some(start) = chunk_start.take() {
-            if idx - start >= min_len {
-                if let Ok(chunk) = std::str::from_utf8(&data[start..idx]) {
+        } else if let Some(start) = chunk_start.take()
+            && idx - start >= min_len
+                && let Ok(chunk) = std::str::from_utf8(&data[start..idx]) {
                     strings.push((start, chunk.to_string()));
                 }
-            }
-        }
     }
 
-    if let Some(start) = chunk_start {
-        if data.len() - start >= min_len {
-            if let Ok(chunk) = std::str::from_utf8(&data[start..]) {
+    if let Some(start) = chunk_start
+        && data.len() - start >= min_len
+            && let Ok(chunk) = std::str::from_utf8(&data[start..]) {
                 strings.push((start, chunk.to_string()));
             }
-        }
-    }
 
     strings
 }

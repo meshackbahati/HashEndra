@@ -198,28 +198,24 @@ pub fn inspect_ext_bytes(data: &[u8], path: String, options: &ExtOptions) -> io:
             recovery_note: record.recovery_note.clone(),
         };
 
-        if let Some(dir) = &options.extract_data_to {
-            if record.regular && !record.blocks.is_empty() {
+        if let Some(dir) = &options.extract_data_to
+            && record.regular && !record.blocks.is_empty() {
                 let bytes = recover_inode_bytes(data, options.volume_offset, &superblock, record)?;
                 let written = write_recovered_file(dir, &entry, &bytes, options.overwrite)?;
                 entry.extracted_path = Some(written.display().to_string());
                 recovered_files += 1;
                 recovered_bytes = recovered_bytes.saturating_add(bytes.len() as u64);
             }
-        }
 
         entries.push(entry);
     }
 
-    let mut notes = Vec::new();
-    notes.push(
+    let notes = vec![
         "Deleted ext-family recovery enumerates inodes directly; deleted names are only shown when they still have live directory references."
             .to_string(),
-    );
-    notes.push(
         "Regular files recover via extents and direct/indirect block pointers. Inline symlinks and journal replay are not rebuilt yet."
             .to_string(),
-    );
+    ];
 
     Ok(ExtReport {
         path,
@@ -909,7 +905,7 @@ mod tests {
     fn build_test_image() -> Vec<u8> {
         let mut image = vec![0u8; 64 * 1024];
         let sb = 1024usize;
-        image[sb + 0x00..sb + 0x04].copy_from_slice(&32u32.to_le_bytes());
+        image[sb..sb + 0x04].copy_from_slice(&32u32.to_le_bytes());
         image[sb + 0x04..sb + 0x08].copy_from_slice(&64u32.to_le_bytes());
         image[sb + 0x14..sb + 0x18].copy_from_slice(&1u32.to_le_bytes());
         image[sb + 0x18..sb + 0x1C].copy_from_slice(&0u32.to_le_bytes());

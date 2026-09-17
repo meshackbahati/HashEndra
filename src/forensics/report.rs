@@ -361,7 +361,7 @@ fn looks_like_forensic_token(token: &str) -> bool {
     let has_digit = token.chars().any(|c| c.is_ascii_digit());
     let has_special = token.chars().any(|c| "$./+=_:-#%".contains(c));
     let is_hexish =
-        token.len() >= 16 && token.len() % 2 == 0 && token.chars().all(|c| c.is_ascii_hexdigit());
+        token.len() >= 16 && token.len().is_multiple_of(2) && token.chars().all(|c| c.is_ascii_hexdigit());
     let is_mixed_case = token.len() >= 20
         && token.chars().any(|c| c.is_ascii_uppercase())
         && token.chars().any(|c| c.is_ascii_lowercase());

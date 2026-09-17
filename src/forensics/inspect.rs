@@ -145,9 +145,9 @@ fn inspect_jpeg_exif(data: &[u8]) -> Option<ArtifactInspection> {
         match marker {
             0xE0 => {
                 // JFIF
-                if !dims_shown {
-                    if let Some(density) = seg_data.get(0..5) {
-                        if density == b"JFIF\0" {
+                if !dims_shown
+                    && let Some(density) = seg_data.get(0..5)
+                        && density == b"JFIF\0" {
                             details.insert("jfif_version".to_string(),
                                 format!("{}.{}", seg_data.get(5).unwrap_or(&0), seg_data.get(6).unwrap_or(&0)));
                             details.insert("density".to_string(),
@@ -158,8 +158,6 @@ fn inspect_jpeg_exif(data: &[u8]) -> Option<ArtifactInspection> {
                                         _ => "aspect",
                                     }));
                         }
-                    }
-                }
             }
             0xE1 => {
                 // EXIF
@@ -175,9 +173,9 @@ fn inspect_jpeg_exif(data: &[u8]) -> Option<ArtifactInspection> {
                     details.insert("comment".to_string(), comment);
                 }
             }
-            0xC0 | 0xC1 | 0xC2 | 0xC3 => {
+            0xC0..=0xC3
                 // SOF0-3: dimensions
-                if !dims_shown && seg_data.len() >= 5 {
+                if !dims_shown && seg_data.len() >= 5 => {
                     details.insert("width".to_string(), be_u16(seg_data, 3).unwrap_or(0).to_string());
                     details.insert("height".to_string(), be_u16(seg_data, 1).unwrap_or(0).to_string());
                     details.insert("precision".to_string(), format!("{}-bit", seg_data[0]));
@@ -187,7 +185,6 @@ fn inspect_jpeg_exif(data: &[u8]) -> Option<ArtifactInspection> {
                         match components { 1 => "grayscale", 3 => "ycbcr", 4 => "cmyk", _ => "other" }.to_string());
                     dims_shown = true;
                 }
-            }
             _ => {}
         }
         offset += 2 + seg_len;
@@ -200,9 +197,7 @@ fn inspect_jpeg_exif(data: &[u8]) -> Option<ArtifactInspection> {
             let value = field.display_value().to_string();
             if !value.is_empty() && value != "None" {
                 let key = format!("exif:{}", tag);
-                if !details.contains_key(&key) {
-                    details.insert(key, value);
-                }
+                details.entry(key).or_insert(value);
             }
         }
     }
@@ -253,9 +248,9 @@ fn parse_tiff_ifd(data: &[u8]) -> BTreeMap<String, String> {
             continue;
         } else if typ == 2 && value_off + count <= data.len() {
             // ASCII
-            let s = String::from_utf8_lossy(&data[value_off..value_off + count])
-                .trim_end_matches('\0').to_string();
-            s
+            
+            String::from_utf8_lossy(&data[value_off..value_off + count])
+                .trim_end_matches('\0').to_string()
         } else if typ == 3 && count == 1 {
             read_u16(data, entry_off + 8, little_endian).unwrap_or(0).to_string()
         } else if typ == 4 && count == 1 {
@@ -754,7 +749,7 @@ fn inspect_mp4(data: &[u8]) -> Option<ArtifactInspection> {
         details.insert("minor_version".to_string(), minor_version.to_string());
         let mut brands = Vec::new();
         let mut brand_off = 16usize;
-        while brand_off + 4 <= data.len() as usize && brand_off < ftyp_len as usize {
+        while brand_off + 4 <= data.len() && brand_off < ftyp_len as usize {
             brands.push(String::from_utf8_lossy(&data[brand_off..brand_off + 4]).to_string());
             brand_off += 4;
         }
@@ -970,7 +965,8 @@ fn inspect_id3(data: &[u8]) -> Option<ArtifactInspection> {
 
     // If no ID3 tags, try to detect MPEG frames for basic info
     if details.is_empty() && data.len() > 4 {
-        if let Some(hdr) = find_mpeg_sync(data) {
+        {
+            let hdr = find_mpeg_sync(data)?;
             let bitrate = mpeg_bitrate(hdr);
             let sample_rate = mpeg_sample_rate(hdr);
             let layer = mpeg_layer(hdr);
@@ -978,8 +974,6 @@ fn inspect_id3(data: &[u8]) -> Option<ArtifactInspection> {
             if bitrate > 0 { details.insert("bitrate".to_string(), format!("{} kbps", bitrate)); }
             if sample_rate > 0 { details.insert("sample_rate".to_string(), format!("{} Hz", sample_rate)); }
             details.insert("layer".to_string(), format!("Layer {}", layer));
-        } else {
-            return None;
         }
     }
 
@@ -1065,7 +1059,7 @@ fn inspect_flac(data: &[u8]) -> Option<ArtifactInspection> {
                     let max_block = be_u16(block_data, 2).unwrap_or(0) as u32;
                     let min_frame = be_u24(block_data, 4).unwrap_or(0);
                     let max_frame = be_u24(block_data, 7).unwrap_or(0);
-                    let sample_rate = (be_u32(block_data, 10).unwrap_or(0) >> 12) as u32;
+                    let sample_rate = be_u32(block_data, 10).unwrap_or(0) >> 12;
                     let channels = ((be_u32(block_data, 10).unwrap_or(0) >> 9) & 0x07) + 1;
                     let bps = ((be_u32(block_data, 10).unwrap_or(0) >> 4) & 0x1F) + 1;
                     let total_samples = (be_u64(block_data, 10).unwrap_or(0) >> 4) & 0x0F_FFFF_FFFF_FFFF;
@@ -1583,7 +1577,7 @@ fn extract_ooxml_metadata(xml: &str, details: &mut BTreeMap<String, String>, _pa
 // ── OLE / RAR / 7z ─────────────────────────────────────────
 
 fn inspect_ole(data: &[u8]) -> Option<ArtifactInspection> {
-    if data.len() < 8 || &data[..8] != &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] { return None; }
+    if data.len() < 8 || data[..8] != [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] { return None; }
     let mut details = BTreeMap::new();
     if data.len() >= 24 {
         let minor = le_u16(data, 24)?;
@@ -1623,7 +1617,7 @@ fn inspect_rar(data: &[u8]) -> Option<ArtifactInspection> {
 }
 
 fn inspect_7z(data: &[u8]) -> Option<ArtifactInspection> {
-    if data.len() < 32 || &data[..6] != &[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C] { return None; }
+    if data.len() < 32 || data[..6] != [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C] { return None; }
     let mut details = BTreeMap::new();
     let major = data.get(6).copied().unwrap_or(0);
     let minor = data.get(7).copied().unwrap_or(0);

@@ -182,7 +182,7 @@ pub fn visualize_entropy(data: &[u8], width: usize) -> String {
     output.push_str(&format!("Entropy profile ({} windows):\n", profile.len()));
     for (offset, ent) in &profile {
         let bar_len = ((ent / max_entropy) * width as f64) as usize;
-        let bar: String = std::iter::repeat('█').take(bar_len.min(width)).collect();
+        let bar: String = std::iter::repeat_n('█', bar_len.min(width)).collect();
         let offset_kb = *offset as f64 / 1024.0;
         output.push_str(&format!("{:>8.1}KB |{:<width$}  {:.2}\n", offset_kb, bar, ent, width = width));
     }

@@ -220,9 +220,7 @@ pub fn inspect_ntfs_bytes(
     let mut empty_run = 0usize;
     for index in 0..options.max_records {
         let offset = boot
-            .mft_offset
-            .checked_add((index.checked_mul(boot.record_size).unwrap_or(usize::MAX)) as u64)
-            .unwrap_or(u64::MAX) as usize;
+            .mft_offset.saturating_add(index.saturating_mul(boot.record_size) as u64) as usize;
         let Some(raw_record) = data.get(offset..offset + boot.record_size) else {
             break;
         };
@@ -262,17 +260,19 @@ pub fn inspect_ntfs_bytes(
 
         if let (Some(dir), Some(stream)) =
             (&options.extract_data_to, parsed.primary_stream.as_ref())
-        {
-            if !parsed.entry.directory {
+            && !parsed.entry.directory {
+                let recovery = EntryRecovery {
+                    output_dir: dir.as_path(),
+                    image: data,
+                    boot: &boot,
+                    bitmap: bitmap.as_ref(),
+                    overwrite: options.overwrite,
+                };
                 let attempt = recover_entry_data(
-                    dir,
+                    &recovery,
                     &parsed.entry,
                     None,
                     stream,
-                    data,
-                    &boot,
-                    bitmap.as_ref(),
-                    options.overwrite,
                 )?;
                 if let Some(written) = attempt.path {
                     parsed.entry.extracted_path = Some(written.display().to_string());
@@ -286,19 +286,21 @@ pub fn inspect_ntfs_bytes(
                     parsed.entry.recovery_note = attempt.note;
                 }
             }
-        }
 
         if let Some(dir) = &options.extract_data_to {
             for alternate in &mut parsed.alternate_streams {
+                let recovery = EntryRecovery {
+                    output_dir: dir.as_path(),
+                    image: data,
+                    boot: &boot,
+                    bitmap: bitmap.as_ref(),
+                    overwrite: options.overwrite,
+                };
                 let attempt = recover_entry_data(
-                    dir,
+                    &recovery,
                     &parsed.entry,
                     Some(&alternate.report.name),
                     &alternate.stream,
-                    data,
-                    &boot,
-                    bitmap.as_ref(),
-                    options.overwrite,
                 )?;
                 if let Some(written) = attempt.path {
                     alternate.report.extracted_path = Some(written.display().to_string());
@@ -761,7 +763,7 @@ fn parse_file_name_attr(value: &[u8]) -> Option<FileNameAttr> {
     let namespace = value[65];
     let name_bytes = value.get(66..66 + name_length * 2)?;
     let utf16: Vec<u16> = name_bytes
-        .chunks_exact(2)
+        .as_chunks::<2>().0.iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
     let name = String::from_utf16(&utf16).ok()?;
@@ -813,7 +815,7 @@ fn parse_attribute_name(
     }
     let bytes = record.get(start..end)?;
     let utf16 = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>().0.iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .collect::<Vec<_>>();
     String::from_utf16(&utf16)
@@ -959,8 +961,7 @@ fn analyze_system_artifacts(
         .iter()
         .find(|entry| entry.entry.name.as_deref() == Some("$LogFile"))
         .and_then(|entry| entry.primary_stream.as_ref())
-    {
-        if let Ok(bytes) = recover_stream_bytes_for_analysis(image, boot, stream, bitmap) {
+        && let Ok(bytes) = recover_stream_bytes_for_analysis(image, boot, stream, bitmap) {
             let page_size = 4096usize;
             let mut restart_pages = 0usize;
             let mut record_pages = 0usize;
@@ -980,7 +981,6 @@ fn analyze_system_artifacts(
                     .map(|value| String::from_utf8_lossy(value).to_string()),
             });
         }
-    }
 
     if let Some((stream_name, stream)) = entries
         .iter()
@@ -991,11 +991,9 @@ fn analyze_system_artifacts(
                     .then_some((stream.report.name.clone(), &stream.stream))
             })
         })
-    {
-        if let Ok(bytes) = recover_stream_bytes_for_analysis(image, boot, stream, bitmap) {
+        && let Ok(bytes) = recover_stream_bytes_for_analysis(image, boot, stream, bitmap) {
             artifacts.usn_journal = Some(parse_usn_journal_summary(&stream_name, &bytes));
         }
-    }
 
     artifacts
 }
@@ -1044,14 +1042,13 @@ fn parse_usn_journal_summary(stream_name: &str, bytes: &[u8]) -> NtfsUsnJrnlSumm
             let end = start.saturating_add(name_length);
             if let Some(name_bytes) = bytes.get(start..end) {
                 let utf16 = name_bytes
-                    .chunks_exact(2)
+                    .as_chunks::<2>().0.iter()
                     .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
                     .collect::<Vec<_>>();
-                if let Ok(name) = String::from_utf16(&utf16) {
-                    if !name.is_empty() && sample_names.len() < 5 {
+                if let Ok(name) = String::from_utf16(&utf16)
+                    && !name.is_empty() && sample_names.len() < 5 {
                         sample_names.push(name);
                     }
-                }
             }
         }
 
@@ -1067,15 +1064,20 @@ fn parse_usn_journal_summary(stream_name: &str, bytes: &[u8]) -> NtfsUsnJrnlSumm
     }
 }
 
+/// Inputs shared by every per-stream recovery call, so the arg list stays small.
+struct EntryRecovery<'a> {
+    output_dir: &'a Path,
+    image: &'a [u8],
+    boot: &'a NtfsBootInfo,
+    bitmap: Option<&'a BitmapData>,
+    overwrite: bool,
+}
+
 fn recover_entry_data(
-    output_dir: &Path,
+    ctx: &EntryRecovery<'_>,
     entry: &NtfsEntry,
     stream_name: Option<&str>,
     stream: &DataStream,
-    image: &[u8],
-    boot: &NtfsBootInfo,
-    bitmap: Option<&BitmapData>,
-    overwrite: bool,
 ) -> io::Result<RecoveryAttempt> {
     match stream {
         DataStream::Resident(bytes) => {
@@ -1088,7 +1090,7 @@ fn recover_entry_data(
                 });
             }
 
-            let written = write_recovered_file(output_dir, entry, stream_name, bytes, overwrite)?;
+            let written = write_recovered_file(ctx.output_dir, entry, stream_name, bytes, ctx.overwrite)?;
             Ok(RecoveryAttempt {
                 path: Some(written),
                 bytes_recovered: bytes.len() as u64,
@@ -1097,7 +1099,7 @@ fn recover_entry_data(
             })
         }
         DataStream::NonResident(stream) => {
-            let (bytes, mut note) = match recover_non_resident_bytes(image, boot, stream, bitmap) {
+            let (bytes, mut note) = match recover_non_resident_bytes(ctx.image, ctx.boot, stream, ctx.bitmap) {
                 Ok(result) => result,
                 Err(reason) => {
                     return Ok(RecoveryAttempt {
@@ -1115,7 +1117,7 @@ fn recover_entry_data(
                 }));
             }
 
-            let written = write_recovered_file(output_dir, entry, stream_name, &bytes, overwrite)?;
+            let written = write_recovered_file(ctx.output_dir, entry, stream_name, &bytes, ctx.overwrite)?;
             Ok(RecoveryAttempt {
                 path: Some(written),
                 bytes_recovered: bytes.len() as u64,
@@ -1171,9 +1173,9 @@ fn recover_raw_non_resident_bytes(
     }
 
     let mut note = None;
-    if bytes.len() < target_size {
-        if let Some(bitmap) = bitmap {
-            if let Some(last_lcn) = last_concrete_lcn(stream) {
+    if bytes.len() < target_size
+        && let Some(bitmap) = bitmap
+            && let Some(last_lcn) = last_concrete_lcn(stream) {
                 let added_clusters =
                     extend_from_bitmap(&mut bytes, image, boot, bitmap, last_lcn, target_size)?;
                 if added_clusters > 0 {
@@ -1183,8 +1185,6 @@ fn recover_raw_non_resident_bytes(
                     ));
                 }
             }
-        }
-    }
 
     if bytes.len() < target_size {
         return Err("runlist does not cover the full declared stream size".to_string());
@@ -1993,6 +1993,9 @@ mod tests {
         )
     }
 
+    // Test fixture mirrors the on-disk record layout field-for-field;
+    // grouping the args would hide that correspondence.
+    #[allow(clippy::too_many_arguments)]
     fn build_non_resident_record_with_flags(
         record_number: u32,
         in_use: bool,
@@ -2098,6 +2101,8 @@ mod tests {
         offset + attr_len
     }
 
+    // Test fixture mirrors the on-disk attribute layout field-for-field.
+    #[allow(clippy::too_many_arguments)]
     fn write_non_resident_attr_with_flags(
         record: &mut [u8],
         offset: usize,

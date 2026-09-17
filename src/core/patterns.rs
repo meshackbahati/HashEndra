@@ -157,6 +157,6 @@ pub fn scan_input(input: &str, context: ScanningContext) -> Vec<DetectionResult>
     crate::core::scanner::apply_ambiguity_penalties(&preprocessed, &context, &mut matched);
 
     let mut results: Vec<DetectionResult> = matched.into_iter().map(|(_, result)| result).collect();
-    results.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+    results.sort_by(|a, b| b.confidence.total_cmp(&a.confidence));
     results
 }

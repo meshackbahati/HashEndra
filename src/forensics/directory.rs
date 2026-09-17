@@ -74,8 +74,7 @@ pub fn scan_directory(path: &Path, extract_artifacts: bool) -> DirectoryScanRepo
         if manager
             .map_file(file_path.to_str().unwrap_or_default())
             .is_ok()
-        {
-            if let Some(report) = manager.build_report(extract_artifacts) {
+            && let Some(report) = manager.build_report(extract_artifacts) {
                 let suspicious = !report.hits.is_empty() || !report.artifacts.is_empty();
 
                 files_analyzed += 1;
@@ -103,7 +102,6 @@ pub fn scan_directory(path: &Path, extract_artifacts: bool) -> DirectoryScanRepo
                     file_report.report = Some(report);
                 }
             }
-        }
 
         files.push(file_report);
     }

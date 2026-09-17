@@ -14,7 +14,7 @@ use std::io::{self, BufRead, Write};
 #[derive(Parser)]
 #[command(name = "hashendra")]
 #[command(version = "2.0.0")]
-#[command(about = "HashEndra - Universal Forensic Decryption & Hashing Engine", long_about = "\
+#[command(about = "HashEndra - identify hashes, decode strings, carve files", long_about = "\
 EXAMPLES:
   hashendra \"5d41402abc4b2a76b9719d911017c592\"     Identify a hash
   hashendra --decode \"aGVsbG8=\"                     Decode a single layer
@@ -34,7 +34,7 @@ EXAMPLES:
   hashendra workshop                                   Interactive workshop
 
 MORE INFO:
-  See https://github.com/hashendra/hashendra or docs/ directory")]
+  See https://github.com/meshackbahati/HashEndra or docs/ directory")]
 struct Cli {
     #[arg(help = "The hash or encoded string to analyze")]
     input: Option<String>,
@@ -397,10 +397,14 @@ fn main() {
     } else if let Some(command) = cli.command {
         match command {
             Commands::Update => {
-                safe_println!("{}", "Checking for signature updates...".blue());
+                // No remote database exists yet; report the bundled version.
                 safe_println!(
                     "{}",
-                    "No updates available. You are running the latest version (v0.1.0).".green()
+                    format!(
+                        "Signatures are bundled with the binary (v{}). Nothing to fetch yet.",
+                        env!("CARGO_PKG_VERSION")
+                    )
+                    .green()
                 );
             }
             Commands::Forensic { command } => match command {
@@ -422,22 +426,22 @@ fn main() {
                     swap,
                     btrfs,
                 } => {
-                    run_forensic_disk(
-                        std::path::Path::new(&path),
-                        cli.json,
+                    run_forensic_disk(DiskOptions {
+                        path: std::path::Path::new(&path),
+                        json: cli.json,
                         sector_size,
                         offset,
                         max_records,
                         deleted_only,
                         include_directories,
-                        extract_data.as_deref(),
+                        extract_data: extract_data.as_deref(),
                         overwrite,
                         ntfs,
-                        fs.as_deref(),
+                        fs: fs.as_deref(),
                         ext4,
                         swap,
                         btrfs,
-                    );
+                    });
                 }
                 ForensicCommands::Carve {
                     path,
@@ -460,13 +464,13 @@ fn main() {
                     matryoshka,
                     depth,
                 } => {
-                    run_carve(
-                        path.as_deref(),
-                        input.as_deref(),
-                        cli.json,
-                        output.as_deref(),
-                        config.as_deref(),
-                        &types,
+                    run_carve(CarveOptions {
+                        path: path.as_deref(),
+                        input: input.as_deref(),
+                        json: cli.json,
+                        output: output.as_deref(),
+                        config: config.as_deref(),
+                        types: &types,
                         include_root,
                         min_size,
                         offset,
@@ -475,32 +479,32 @@ fn main() {
                         sector_size,
                         quick,
                         audit_only,
-                        !no_recursive,
+                        recursive: !no_recursive,
                         overwrite,
                         dry_run,
                         list_types,
                         matryoshka,
                         depth,
-                    );
+                    });
                 }
             },
             Commands::Disk { path, sector_size } => {
-                run_forensic_disk(
-                    std::path::Path::new(&path),
-                    cli.json,
+                run_forensic_disk(DiskOptions {
+                    path: std::path::Path::new(&path),
+                    json: cli.json,
                     sector_size,
-                    0,
-                    256,
-                    false,
-                    false,
-                    None,
-                    false,
-                    false,
-                    None,
-                    false,
-                    false,
-                    false,
-                );
+                    offset: 0,
+                    max_records: 256,
+                    deleted_only: false,
+                    include_directories: false,
+                    extract_data: None,
+                    overwrite: false,
+                    ntfs: false,
+                    fs: None,
+                    ext4: false,
+                    swap: false,
+                    btrfs: false,
+                });
             }
             Commands::Ntfs {
                 path,
@@ -511,22 +515,22 @@ fn main() {
                 extract_data,
                 overwrite,
             } => {
-                run_forensic_disk(
-                    std::path::Path::new(&path),
-                    cli.json,
-                    512,
+                run_forensic_disk(DiskOptions {
+                    path: std::path::Path::new(&path),
+                    json: cli.json,
+                    sector_size: 512,
                     offset,
                     max_records,
                     deleted_only,
                     include_directories,
-                    extract_data.as_deref(),
+                    extract_data: extract_data.as_deref(),
                     overwrite,
-                    true,
-                    None,
-                    false,
-                    false,
-                    false,
-                );
+                    ntfs: true,
+                    fs: None,
+                    ext4: false,
+                    swap: false,
+                    btrfs: false,
+                });
             }
             Commands::Carve {
                 path,
@@ -549,13 +553,13 @@ fn main() {
                 matryoshka,
                 depth,
             } => {
-                run_carve(
-                    path.as_deref(),
-                    input.as_deref(),
-                    cli.json,
-                    output.as_deref(),
-                    config.as_deref(),
-                    &types,
+                run_carve(CarveOptions {
+                    path: path.as_deref(),
+                    input: input.as_deref(),
+                    json: cli.json,
+                    output: output.as_deref(),
+                    config: config.as_deref(),
+                    types: &types,
                     include_root,
                     min_size,
                     offset,
@@ -564,13 +568,13 @@ fn main() {
                     sector_size,
                     quick,
                     audit_only,
-                    !no_recursive,
+                    recursive: !no_recursive,
                     overwrite,
                     dry_run,
                     list_types,
                     matryoshka,
                     depth,
-                );
+                });
             }
             Commands::Workshop { input } => {
                 print_banner();
@@ -624,7 +628,7 @@ fn print_banner() {
     );
     safe_println!(
         "{}",
-        "          Universal Forensic Decryption & Hashing Engine          ".cyan()
+        "          identify hashes - decode strings - carve files          ".cyan()
     );
     safe_println!(
         "{}",
@@ -649,13 +653,22 @@ fn handle_deep_decrypt(input: &str) {
         );
     }
 
-    if result.layers_unwrapped > 0 {
+    if result.layers_unwrapped > 0 && result.confident_stop {
         safe_println!(
             "\n[OK] Fully decrypted in {} layers",
             result.layers_unwrapped
         );
         safe_println!(
             "[FINISH] Final Payload: {}",
+            result.final_result.cyan().bold()
+        );
+    } else if result.layers_unwrapped > 0 {
+        safe_println!(
+            "\n[i] Stopped after {} layer(s) without reaching clear plaintext.",
+            result.layers_unwrapped
+        );
+        safe_println!(
+            "[i] Best candidate so far: {}",
             result.final_result.cyan().bold()
         );
     } else {
@@ -677,9 +690,15 @@ fn handle_decode(input: &str, _context_str: &str) {
         );
     }
 
-    if result.layers_unwrapped > 0 {
+    if result.layers_unwrapped > 0 && result.confident_stop {
         safe_println!(
             "[OK] Decoded {} layers to: {}",
+            result.layers_unwrapped,
+            result.final_result.cyan().bold()
+        );
+    } else if result.layers_unwrapped > 0 {
+        safe_println!(
+            "[i] Unwrapped {} layer(s) but found no clear plaintext: {}",
             result.layers_unwrapped,
             result.final_result.cyan().bold()
         );
@@ -697,9 +716,18 @@ fn handle_rot(input: &str) {
         .into_iter()
         .map(|(shift, decoded)| (shift, decoded.clone(), chi_squared_score(&decoded)))
         .collect();
-    scored.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
-    for (shift, decoded, chi) in &scored {
-        let marker = if *chi < 150.0 { "* " } else { "  " };
+    scored.sort_by(|a, b| a.2.total_cmp(&b.2));
+    // `*` is the single best chi-squared match; `+` marks the other
+    // plausible ones. On short inputs chi-squared is noisy — the top hit
+    // is a suggestion, not a verdict.
+    for (n, (shift, decoded, chi)) in scored.iter().enumerate() {
+        let marker = if n == 0 {
+            "* "
+        } else if *chi < 150.0 {
+            "+ "
+        } else {
+            "  "
+        };
         safe_println!("  {}{:02}: {} (chi2={:.1})", marker, shift, decoded, chi);
     }
 }
@@ -719,16 +747,16 @@ fn handle_xor(input: &str) {
     }
 
     // Fall back to hex-decoded if input looks like hex and raw didn't work
-    if input.len() % 2 == 0 && input.chars().all(|c| c.is_ascii_hexdigit()) {
-        if let Some(bytes) = decode_hex(input) {
-            let hex_results = xor_crack(&bytes);
-            if !hex_results.is_empty() {
-                safe_println!("  [as hex-decoded bytes]:");
-                for (key, decoded, score) in hex_results.iter().take(3) {
-                    safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
-                }
-                return;
+    if input.len().is_multiple_of(2)
+        && input.chars().all(|c| c.is_ascii_hexdigit())
+        && let Some(bytes) = decode_hex(input) {
+        let hex_results = xor_crack(&bytes);
+        if !hex_results.is_empty() {
+            safe_println!("  [as hex-decoded bytes]:");
+            for (key, decoded, score) in hex_results.iter().take(3) {
+                safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
             }
+            return;
         }
     }
 
@@ -874,23 +902,11 @@ fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &st
                 let parts: Vec<&str> = input.splitn(3, '.').collect();
                 if parts.len() == 3 {
                     safe_println!("\n+-- JWT DECODED -------------------------------------------------+");
-                    if let Some(decoded) = decode_base64_url(parts[0]) {
-                        if let Ok(text) = String::from_utf8(decoded) {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                                safe_println!("|  header: {}", serde_json::to_string_pretty(&json).unwrap().green());
-                            } else {
-                                safe_println!("|  header: {} (raw)", text.white());
-                            }
-                        }
+                    if let Some(header) = format_jwt_segment(parts[0]) {
+                        safe_println!("|  header: {}", header.green());
                     }
-                    if let Some(decoded) = decode_base64_url(parts[1]) {
-                        if let Ok(text) = String::from_utf8(decoded) {
-                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                                safe_println!("|  payload: {}", serde_json::to_string_pretty(&json).unwrap().cyan());
-                            } else {
-                                safe_println!("|  payload: {} (raw)", text.white());
-                            }
-                        }
+                    if let Some(payload) = format_jwt_segment(parts[1]) {
+                        safe_println!("|  payload: {}", payload.cyan());
                     }
                     safe_println!("+----------------------------------------------------------------+");
                     safe_println!("  JWT (RFC 7519) consists of 3 parts:");
@@ -925,7 +941,13 @@ fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &st
 }
 
 fn analyze_file(path: &str, json: bool) {
-    let file = std::fs::File::open(path).expect("Could not open file");
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) => {
+            safe_println!("[FAIL] cannot open {}: {}", path, error);
+            return;
+        }
+    };
     let reader = io::BufReader::new(file);
 
     for line in reader.lines() {
@@ -997,9 +1019,8 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
             Ok(meta) => {
                 if meta.file_type().is_symlink() {
                     // Resolve symlink before checking
-                    match path.canonicalize() {
-                        Ok(real) => return run_forensic_scan(&real, json, extract_artifacts),
-                        Err(_) => {}
+                    if let Ok(real) = path.canonicalize() {
+                        return run_forensic_scan(&real, json, extract_artifacts);
                     }
                 }
                 if !meta.file_type().is_file() {
@@ -1357,22 +1378,87 @@ fn is_network_filesystem_hint(hint: ForensicFilesystemHint) -> bool {
     )
 }
 
-fn run_forensic_disk(
-    path: &std::path::Path,
+/// Options shared by the NTFS/ext/FAT inspect commands (identical shapes).
+struct InspectOptions<'a> {
+    path: &'a std::path::Path,
+    json: bool,
+    offset: usize,
+    max_entries: usize,
+    deleted_only: bool,
+    include_directories: bool,
+    extract_data: Option<&'a str>,
+    overwrite: bool,
+}
+
+/// Options for the forensic disk dispatcher (14 clap flags in one place).
+struct DiskOptions<'a> {
+    path: &'a std::path::Path,
     json: bool,
     sector_size: usize,
     offset: usize,
     max_records: usize,
     deleted_only: bool,
     include_directories: bool,
-    extract_data: Option<&str>,
+    extract_data: Option<&'a str>,
     overwrite: bool,
     ntfs: bool,
-    fs: Option<&str>,
+    fs: Option<&'a str>,
     ext4: bool,
     swap: bool,
     btrfs: bool,
-) {
+}
+
+/// Options for the carve dispatcher (20 clap flags in one place).
+struct CarveOptions<'a> {
+    path: Option<&'a str>,
+    input: Option<&'a str>,
+    json: bool,
+    output: Option<&'a str>,
+    config: Option<&'a str>,
+    types: &'a [String],
+    include_root: bool,
+    min_size: usize,
+    offset: usize,
+    length: Option<usize>,
+    max_size: Option<usize>,
+    sector_size: Option<usize>,
+    quick: bool,
+    audit_only: bool,
+    recursive: bool,
+    overwrite: bool,
+    dry_run: bool,
+    list_types: bool,
+    matryoshka: bool,
+    depth: Option<usize>,
+}
+
+/// Decode one JWT segment: pretty JSON when possible, raw text otherwise.
+fn format_jwt_segment(segment: &str) -> Option<String> {
+    let decoded = decode_base64_url(segment)?;
+    let text = String::from_utf8(decoded).ok()?;
+    Some(match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(json) => serde_json::to_string_pretty(&json).unwrap(),
+        Err(_) => format!("{} (raw)", text),
+    })
+}
+
+fn run_forensic_disk(opts: DiskOptions<'_>) {
+    let DiskOptions {
+        path,
+        json,
+        sector_size,
+        offset,
+        max_records,
+        deleted_only,
+        include_directories,
+        extract_data,
+        overwrite,
+        ntfs,
+        fs,
+        ext4,
+        swap,
+        btrfs,
+    } = opts;
     let hint = match select_forensic_filesystem_hint(ntfs, fs, ext4, swap, btrfs) {
         Ok(hint) => hint,
         Err(error) => {
@@ -1413,16 +1499,16 @@ fn run_forensic_disk(
                     }
                 }
             };
-            run_ntfs_inspect(
+            run_ntfs_inspect(InspectOptions {
                 path,
                 json,
-                selected_offset,
-                max_records,
+                offset: selected_offset,
+                max_entries: max_records,
                 deleted_only,
                 include_directories,
                 extract_data,
                 overwrite,
-            );
+            });
         }
         ForensicFilesystemHint::Fat32 => {
             let selected_offset = if offset != 0 {
@@ -1450,16 +1536,16 @@ fn run_forensic_disk(
                     }
                 }
             };
-            run_fat_inspect(
+            run_fat_inspect(InspectOptions {
                 path,
                 json,
-                selected_offset,
-                max_records,
+                offset: selected_offset,
+                max_entries: max_records,
                 deleted_only,
                 include_directories,
                 extract_data,
                 overwrite,
-            );
+            });
         }
         ForensicFilesystemHint::Ext | ForensicFilesystemHint::Ext4 => {
             let selected_offset = if offset != 0 {
@@ -1484,16 +1570,16 @@ fn run_forensic_disk(
                     }
                 }
             };
-            run_ext_inspect(
+            run_ext_inspect(InspectOptions {
                 path,
                 json,
-                selected_offset,
-                max_records,
+                offset: selected_offset,
+                max_entries: max_records,
                 deleted_only,
                 include_directories,
                 extract_data,
                 overwrite,
-            );
+            });
         }
         other => {
             let hint_name = filesystem_hint_name(other);
@@ -1634,16 +1720,17 @@ fn run_disk_inspect(path: &std::path::Path, json: bool, sector_size: usize) {
     }
 }
 
-fn run_ntfs_inspect(
-    path: &std::path::Path,
-    json: bool,
-    offset: usize,
-    max_records: usize,
-    deleted_only: bool,
-    include_directories: bool,
-    extract_data: Option<&str>,
-    overwrite: bool,
-) {
+fn run_ntfs_inspect(opts: InspectOptions<'_>) {
+    let InspectOptions {
+        path,
+        json,
+        offset,
+        max_entries: max_records,
+        deleted_only,
+        include_directories,
+        extract_data,
+        overwrite,
+    } = opts;
     let options = hashendra::forensics::ntfs::NtfsOptions {
         volume_offset: offset,
         max_records,
@@ -1676,16 +1763,17 @@ fn run_ntfs_inspect(
     }
 }
 
-fn run_ext_inspect(
-    path: &std::path::Path,
-    json: bool,
-    offset: usize,
-    max_inodes: usize,
-    deleted_only: bool,
-    include_directories: bool,
-    extract_data: Option<&str>,
-    overwrite: bool,
-) {
+fn run_ext_inspect(opts: InspectOptions<'_>) {
+    let InspectOptions {
+        path,
+        json,
+        offset,
+        max_entries: max_inodes,
+        deleted_only,
+        include_directories,
+        extract_data,
+        overwrite,
+    } = opts;
     let options = hashendra::forensics::ext::ExtOptions {
         volume_offset: offset,
         max_inodes,
@@ -1718,16 +1806,17 @@ fn run_ext_inspect(
     }
 }
 
-fn run_fat_inspect(
-    path: &std::path::Path,
-    json: bool,
-    offset: usize,
-    max_entries: usize,
-    deleted_only: bool,
-    include_directories: bool,
-    extract_data: Option<&str>,
-    overwrite: bool,
-) {
+fn run_fat_inspect(opts: InspectOptions<'_>) {
+    let InspectOptions {
+        path,
+        json,
+        offset,
+        max_entries,
+        deleted_only,
+        include_directories,
+        extract_data,
+        overwrite,
+    } = opts;
     let options = hashendra::forensics::fat::FatOptions {
         volume_offset: offset,
         max_entries,
@@ -1760,28 +1849,29 @@ fn run_fat_inspect(
     }
 }
 
-fn run_carve(
-    path: Option<&str>,
-    input: Option<&str>,
-    json: bool,
-    output: Option<&str>,
-    config: Option<&str>,
-    types: &[String],
-    include_root: bool,
-    min_size: usize,
-    offset: usize,
-    length: Option<usize>,
-    max_size: Option<usize>,
-    sector_size: Option<usize>,
-    quick: bool,
-    audit_only: bool,
-    recursive: bool,
-    overwrite: bool,
-    dry_run: bool,
-    list_types: bool,
-    matryoshka: bool,
-    depth: Option<usize>,
-) {
+fn run_carve(opts: CarveOptions<'_>) {
+    let CarveOptions {
+        path,
+        input,
+        json,
+        output,
+        config,
+        types,
+        include_root,
+        min_size,
+        offset,
+        length,
+        max_size,
+        sector_size,
+        quick,
+        audit_only,
+        recursive,
+        overwrite,
+        dry_run,
+        list_types,
+        matryoshka,
+        depth,
+    } = opts;
     let config_profiles = config
         .map(std::path::Path::new)
         .map(hashendra::forensics::carve::load_profiles_from_config)
@@ -2041,7 +2131,9 @@ fn run_workshop(initial_input: Option<String>) {
 
     loop {
         safe_print!("{}", "hashendra> ".bright_white().bold());
-        io::stdout().flush().unwrap();
+        if io::stdout().flush().is_err() {
+            break; // stdout is gone; nothing left to interact with
+        }
 
         let mut input = String::new();
         if io::stdin().read_line(&mut input).is_err() {
@@ -2111,7 +2203,7 @@ fn run_workshop(initial_input: Option<String>) {
                         match std::fs::read(path) {
                             Ok(bytes) => {
                                 let is_binary = !bytes.is_empty()
-                                    && bytes.iter().any(|&b| b == 0x00)
+                                    && bytes.contains(&0x00)
                                     && String::from_utf8(bytes.clone()).is_err();
                                 current_path = Some(path.display().to_string());
                                 if is_binary {

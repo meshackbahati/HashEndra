@@ -164,8 +164,8 @@ pub fn inspect_fat_bytes(data: &[u8], path: String, options: &FatOptions) -> io:
             recovery_note: None,
         };
 
-        if let Some(dir) = &options.extract_data_to {
-            if !parsed.directory && parsed.size > 0 && parsed.first_cluster >= 2 {
+        if let Some(dir) = &options.extract_data_to
+            && !parsed.directory && parsed.size > 0 && parsed.first_cluster >= 2 {
                 let (bytes, note) = recover_file_bytes(
                     data,
                     &boot,
@@ -179,7 +179,6 @@ pub fn inspect_fat_bytes(data: &[u8], path: String, options: &FatOptions) -> io:
                 recovered_files += 1;
                 recovered_bytes = recovered_bytes.saturating_add(bytes.len() as u64);
             }
-        }
 
         entries.push(entry);
     }
@@ -333,7 +332,7 @@ fn parse_boot_sector(data: &[u8], volume_offset: usize) -> Option<BootSector> {
     }
 
     let root_dir_sectors =
-        ((root_entry_count as u32 * 32) + (bytes_per_sector as u32 - 1)) / bytes_per_sector as u32;
+        (root_entry_count as u32 * 32).div_ceil(bytes_per_sector as u32);
     let data_sectors = total_sectors.checked_sub(
         reserved_sectors as u32 + fat_count as u32 * sectors_per_fat + root_dir_sectors,
     )?;
@@ -406,7 +405,7 @@ fn collect_entries(
             }
         };
 
-        for record in bytes.chunks_exact(32) {
+        for record in bytes.as_chunks::<32>().0 {
             if scanned_entries >= max_entries {
                 notes.push(format!(
                     "entry limit reached at {}; increase --max-records to inspect more FAT directory entries",
@@ -767,7 +766,7 @@ fn div_ceil(value: usize, divisor: usize) -> usize {
     if divisor == 0 {
         0
     } else {
-        value.saturating_add(divisor - 1) / divisor
+        value.div_ceil(divisor)
     }
 }
 
