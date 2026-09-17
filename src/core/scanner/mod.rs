@@ -223,8 +223,6 @@ pub fn decoded_payload_confidence(data: &[u8]) -> f32 {
     (printable * 0.55 + (1.0 - controls).clamp(0.0, 1.0) * 0.20).clamp(0.0, 1.0)
 }
 
-/// Refines the confidence score based on entropy, charset, and other heuristics.
-
 pub mod codecs;
 pub mod decode;
 pub mod score;

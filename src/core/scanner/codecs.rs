@@ -1,3 +1,4 @@
+/// Decodes Base32 (RFC 4648).
 pub fn decode_base32(input: &str) -> Option<Vec<u8>> {
     let input = input.trim_end_matches('=');
     let mut bits = 0u32;

@@ -438,8 +438,6 @@ pub fn decode_morse(input: &str) -> Option<String> {
     }
 }
 
-/// Decodes Base32 (RFC 4648).
-
 #[cfg(test)]
 #[path = "decode_tests.rs"]
 mod ascii85_tests;

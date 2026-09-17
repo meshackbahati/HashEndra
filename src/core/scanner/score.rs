@@ -10,6 +10,7 @@ use crate::core::patterns::{DetectionType, ScanningContext, Signature};
 use regex::Regex;
 use std::collections::HashMap;
 
+/// Refines the confidence score based on entropy, charset, and other heuristics.
 pub fn score_detection(input: &str, sig: &Signature, context: &ScanningContext) -> f32 {
     let mut score = sig.confidence_weight;
 
