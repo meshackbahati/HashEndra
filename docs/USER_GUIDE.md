@@ -22,7 +22,7 @@ hashendra "5d41402abc4b2a76b9719d911017c592"
 ```
 
 HashEndra will:
-- Detect the hash type (MD5, 95% confidence)
+- Detect the hash type (MD5, 72% confidence)
 - Show the character length (32 hex characters)
 - Display the entropy (≈3.5 bits/char)
 - Recommend a hashcat cracking command
@@ -39,7 +39,10 @@ hashendra --decode "aGVsbG8="
 hashendra --deep-decrypt "NzIzNjg2OTZkNjk2ZQ=="
 ```
 
-This recursively unwraps each layer until plaintext is found.
+This recursively unwraps each layer. It stops at plaintext, on revisit,
+or at 10 layers — and says so honestly if it never gets there. Short or
+ambiguous input may stop after one layer; check `--rot` / `--xor` output
+directly in that case.
 
 ### Carve files from a disk image
 

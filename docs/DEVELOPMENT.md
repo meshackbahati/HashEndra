@@ -17,8 +17,8 @@ src/
 │   ├── cryptanalysis.rs # Chi-squared, frequency analysis
 │   └── recursive_engine.rs  # Multi-layer unwrapping
 ├── detectors/           # Detection signatures
-│   ├── hashes.rs        # 130+ hash signatures
-│   ├── encodings.rs     # 20+ encoding signatures
+│   ├── hashes.rs        # 85 hash signatures
+│   ├── encodings.rs     # 28 encoding signatures
 │   ├── ciphers.rs       # Cipher signatures
 │   ├── classic_ciphers.rs   # Auto-crack ciphers
 │   └── stego.rs         # File magic byte signatures

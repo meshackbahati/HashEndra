@@ -2,7 +2,7 @@
 
 ## Overview
 
-HashEndra's detection engine supports **200+ signatures** across four categories:
+HashEndra's detection engine supports **140+ signatures** across four categories:
 
 ```mermaid
 mindmap

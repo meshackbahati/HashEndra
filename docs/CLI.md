@@ -27,10 +27,8 @@ Options:
 
 | Flag | Description |
 |---|---|
-| `-j, --json` | JSON output |
-| `-v, --verbose` | Verbose output |
-| `--strings` | Extract strings |
-| `--no-entropy` | Skip entropy calculation |
+| `--no-extract` | Don't carve embedded artifacts to disk |
+| `-j, --json` | Global flag, goes before `forensic`: `hashendra -j forensic scan …` |
 
 ### `forensic disk`
 Inspect a disk image or volume.
@@ -59,7 +57,7 @@ Carve embedded files from a binary.
 
 ```
 hashendra forensic carve image.dd -o carved/
-hashendra forensic carve -t jpg -t png -t zip file.bin
+hashendra forensic carve -t jpg,png file.bin
 hashendra forensic carve --quick --dry-run disk.dd
 hashendra forensic carve --matryoshka --depth 5 malware.bin
 ```
@@ -70,17 +68,21 @@ Options:
 |---|---|
 | `-i, --input <FILE>` | Input file or directory |
 | `-o, --output <DIR>` | Output directory |
-| `-t, --types <TYPES>` | File types to carve (jpg, png, zip, ...) |
+| `-t, --types <TYPES>` | Only these extensions, comma-separated (`-t jpg,png`) |
+| `-a, --include-root` | Also match signatures at offset 0 |
 | `-c, --config <FILE>` | Foremost-style config file |
 | `-Q, --quick` | First hit per profile (fast mode) |
 | `--min-size <BYTES>` | Minimum carve size (default: 1) |
 | `--max-size <BYTES>` | Max size for formats without known footer |
 | `--offset <BYTES>` | Starting byte offset |
-| `--length <BYTES>` | Length limit |
+| `--length <BYTES>` | Length limit from offset |
+| `--sector-size <SIZE>` | Sector numbers in reports |
 | `-M, --matryoshka` | Recursive extraction (carve inside carved) |
 | `--depth <N>` | Max recursion depth |
 | `--dry-run` | Report without writing |
 | `-w, --audit-only` | Write audit log only |
+| `--no-recursive` | Don't recurse into directories |
+| `--overwrite` | Allow overwriting existing files |
 | `--list-types` | List all supported carve types |
 
 ### `workshop`
@@ -119,7 +121,7 @@ hashendra workshop
 ```bash
 # Identify a hash type
 hashendra "5d41402abc4b2a76b9719d911017c592"
-# → Identifies as MD5 (95% confidence)
+# → MD5 at 72%, with hashcat/john modes and a crack recommendation
 
 # Hash from file
 hashendra -f password_hashes.txt
@@ -132,16 +134,16 @@ hashendra -j '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'
 ```bash
 # Detect encoding
 hashendra "aGVsbG8gd29ybGQ="
-# → Identifies as Base64 (98% confidence)
+# → Base64 at 90%
 
 # Decode (one layer)
 hashendra --decode "NzIzNjg2OTZkNjk2ZQ=="
-# → "hex:726c696e65"
+# → Layer 1: Decoded Base64 -> 72368696d696e
+# → then stops: hex-looking remainder is not valid hex, nothing further fires
 
 # Deep recursive decode (unwrap all layers)
-hashendra --deep-decrypt "NzIzNjg2OTZkNjk2ZQ=="
-# → Layer 1: Decoded Base64 → "726c696e65"
-# → Layer 2: Decoded Hex → "rline"
+hashendra --deep-decrypt "SGVsbG8gV29ybGQ="
+# → Layer 1: Base64 -> Hello World, then stops (plaintext reached)
 ```
 
 ### Encoding / Hashing / Encryption
@@ -186,8 +188,8 @@ hashendra --context blockchain "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
 # Basic carve all types
 hashendra forensic carve disk_image.dd -o carved/
 
-# Carve specific types only
-hashendra forensic carve -t jpg -t png -t zip file.bin -o images/
+# Carve specific types only (comma-separated)
+hashendra forensic carve -t jpg,png,zip file.bin -o images/
 
 # Quick mode (first match per type)
 hashendra forensic carve --quick disk.dd -o output/
@@ -221,20 +223,26 @@ hashendra forensic disk --fs ntfs --deleted-only --extract-data recovered/ disk.
 hashendra workshop
 ```
 
-Workshop commands:
+Workshop commands (full list via `/help` inside):
 
 | Command | Description |
 |---|---|
-| `scan <input>` | Scan a string |
-| `decode <input>` | Decode a string |
-| `rot <input>` | ROT brute-force |
-| `xor <hex>` | XOR crack |
-| `hash <algo> <input>` | Compute hash |
-| `encode <format> <input>` | Encode string |
-| `context <ctx>` | Set detection context |
-| `json` | Toggle JSON output |
-| `help` | Show help |
-| `exit` | Exit workshop |
+| `/set <text>` | Set current working text |
+| `/load <path>` | Load a file into the buffer |
+| `/forensic <path>` | Forensic scan on a file or directory |
+| `/filetype [path]` | Identify file type |
+| `/meta [path]` | Show file metadata |
+| `/strings [n]` | Extract printable strings |
+| `/context <ctx>` | Set analysis context |
+| `/analyze` | Run detection on current text |
+| `/base64`, `/hex`, `/base32`, `/base58` | Decode one layer |
+| `/binary`, `/octal`, `/ascii85`, `/qp` | Decode one layer |
+| `/html`, `/morse`, `/url` | Decode one layer |
+| `/rot <n>`, `/rot13` | Apply Caesar shift |
+| `/xor <key>` | XOR with a string key |
+| `/deep` | Run the auto-unwrapper |
+| `/status`, `/history`, `/undo` | State management |
+| `/exit` | Exit workshop |
 
 ### Batch Processing
 ```bash
