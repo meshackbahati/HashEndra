@@ -335,9 +335,10 @@ enum ForensicCommands {
     },
 }
 
-fn main() {
+fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let context = cli.context.clone();
+    let mut ok = true;
 
     // Handle external custom signatures
     if let Some(ref custom_path) = cli.custom_signatures {
@@ -362,38 +363,38 @@ fn main() {
     // List-only flags (no input needed)
     if cli.list_hashes {
         print_hash_algorithms();
-        return;
+        return std::process::ExitCode::SUCCESS;
     }
     if cli.list_encodings {
         print_encoding_formats();
-        return;
+        return std::process::ExitCode::SUCCESS;
     }
     if cli.list_ciphers {
         print_encryption_ciphers();
-        return;
+        return std::process::ExitCode::SUCCESS;
     }
 
     // Operations that require input
     if let Some(ref input) = cli.input {
         if let Some(algo) = cli.hash {
-            handle_hash(input, algo.as_deref());
+            ok &= handle_hash(input, algo.as_deref());
         } else if let Some(ref cipher) = cli.encrypt {
-            handle_encrypt(input, cipher, &cli.key, &cli.cipher_param);
+            ok &= handle_encrypt(input, cipher, &cli.key, &cli.cipher_param);
         } else if let Some(ref format) = cli.to {
-            handle_encode(input, format);
+            ok &= handle_encode(input, format);
         } else if cli.deep_decrypt {
-            handle_deep_decrypt(input);
+            ok &= handle_deep_decrypt(input);
         } else if cli.decode {
-            handle_decode(input, &context);
+            ok &= handle_decode(input, &context);
         } else if cli.rot {
-            handle_rot(input);
+            ok &= handle_rot(input);
         } else if cli.xor {
-            handle_xor(input);
+            ok &= handle_xor(input);
         } else {
-            analyze_single_input(input, cli.json, cli.verbose, &context);
+            ok &= analyze_single_input(input, cli.json, cli.verbose, &context);
         }
     } else if let Some(ref file_path) = cli.file {
-        analyze_file(file_path, cli.json);
+        ok &= analyze_file(file_path, cli.json);
     } else if let Some(command) = cli.command {
         match command {
             Commands::Update => {
@@ -409,7 +410,7 @@ fn main() {
             }
             Commands::Forensic { command } => match command {
                 ForensicCommands::Scan { path, no_extract } => {
-                    run_forensic_scan(std::path::Path::new(&path), cli.json, !no_extract);
+                    ok &= run_forensic_scan(std::path::Path::new(&path), cli.json, !no_extract);
                 }
                 ForensicCommands::Disk {
                     path,
@@ -426,7 +427,7 @@ fn main() {
                     swap,
                     btrfs,
                 } => {
-                    run_forensic_disk(DiskOptions {
+                    ok &= run_forensic_disk(DiskOptions {
                         path: std::path::Path::new(&path),
                         json: cli.json,
                         sector_size,
@@ -464,7 +465,7 @@ fn main() {
                     matryoshka,
                     depth,
                 } => {
-                    run_carve(CarveOptions {
+                    ok &= run_carve(CarveOptions {
                         path: path.as_deref(),
                         input: input.as_deref(),
                         json: cli.json,
@@ -489,7 +490,7 @@ fn main() {
                 }
             },
             Commands::Disk { path, sector_size } => {
-                run_forensic_disk(DiskOptions {
+                ok &= run_forensic_disk(DiskOptions {
                     path: std::path::Path::new(&path),
                     json: cli.json,
                     sector_size,
@@ -515,7 +516,7 @@ fn main() {
                 extract_data,
                 overwrite,
             } => {
-                run_forensic_disk(DiskOptions {
+                ok &= run_forensic_disk(DiskOptions {
                     path: std::path::Path::new(&path),
                     json: cli.json,
                     sector_size: 512,
@@ -553,7 +554,7 @@ fn main() {
                 matryoshka,
                 depth,
             } => {
-                run_carve(CarveOptions {
+                ok &= run_carve(CarveOptions {
                     path: path.as_deref(),
                     input: input.as_deref(),
                     json: cli.json,
@@ -578,7 +579,7 @@ fn main() {
             }
             Commands::Workshop { input } => {
                 print_banner();
-                run_workshop(input);
+                ok &= run_workshop(input);
             }
         }
     } else {
@@ -603,6 +604,7 @@ fn main() {
                 }
                 Err(e) => {
                     safe_println!("{}", format!("[FAIL] read error: {}", e).red());
+                    ok = false;
                     break;
                 }
             }
@@ -610,6 +612,12 @@ fn main() {
         if first {
             safe_println!("{}", "No input provided. Use --help for usage.".yellow());
         }
+    }
+
+    if ok {
+        std::process::ExitCode::SUCCESS
+    } else {
+        std::process::ExitCode::FAILURE
     }
 }
 
@@ -635,7 +643,9 @@ fn print_banner() {
         "------------------------------------------------------------------".cyan()
     );
 }
-fn handle_deep_decrypt(input: &str) {
+/// Runs deep-decrypt and reports success only on reaching plaintext.
+/// Returns false when nothing unwrapped or no clear result was reached.
+fn handle_deep_decrypt(input: &str) -> bool {
     let engine = RecursiveEngine::new(10);
     safe_println!(
         "[SCAN] Starting deep recursive unwrapping for: {}",
@@ -662,6 +672,7 @@ fn handle_deep_decrypt(input: &str) {
             "[FINISH] Final Payload: {}",
             result.final_result.cyan().bold()
         );
+        true
     } else if result.layers_unwrapped > 0 {
         safe_println!(
             "\n[i] Stopped after {} layer(s) without reaching clear plaintext.",
@@ -671,12 +682,14 @@ fn handle_deep_decrypt(input: &str) {
             "[i] Best candidate so far: {}",
             result.final_result.cyan().bold()
         );
+        false
     } else {
         safe_println!("\n[FAIL] No layers could be automatically unwrapped.");
+        false
     }
 }
 
-fn handle_decode(input: &str, _context_str: &str) {
+fn handle_decode(input: &str, _context_str: &str) -> bool {
     // Delegate to RecursiveEngine for consistency with --deep-decrypt
     let engine = RecursiveEngine::new(10);
     let result = engine.explore_paths(input);
@@ -696,18 +709,21 @@ fn handle_decode(input: &str, _context_str: &str) {
             result.layers_unwrapped,
             result.final_result.cyan().bold()
         );
+        true
     } else if result.layers_unwrapped > 0 {
         safe_println!(
             "[i] Unwrapped {} layer(s) but found no clear plaintext: {}",
             result.layers_unwrapped,
             result.final_result.cyan().bold()
         );
+        false
     } else {
         safe_println!("[FAIL] No automatic decoding layers found.");
+        false
     }
 }
 
-fn handle_rot(input: &str) {
+fn handle_rot(input: &str) -> bool {
     use hashendra::core::cryptanalysis::chi_squared_score;
     use hashendra::core::scanner::rot_brute_force;
     safe_println!("[ROT] Brute-forcing ROT for: {}", input);
@@ -730,9 +746,10 @@ fn handle_rot(input: &str) {
         };
         safe_println!("  {}{:02}: {} (chi2={:.1})", marker, shift, decoded, chi);
     }
+    true
 }
 
-fn handle_xor(input: &str) {
+fn handle_xor(input: &str) -> bool {
     use hashendra::core::scanner::{decode_hex, xor_crack};
     safe_println!("[XOR] Attempting single-byte XOR crack...");
 
@@ -743,7 +760,7 @@ fn handle_xor(input: &str) {
         for (key, decoded, score) in raw_results.iter().take(3) {
             safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
         }
-        return;
+        return true;
     }
 
     // Fall back to hex-decoded if input looks like hex and raw didn't work
@@ -756,18 +773,19 @@ fn handle_xor(input: &str) {
             for (key, decoded, score) in hex_results.iter().take(3) {
                 safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
             }
-            return;
+            return true;
         }
     }
 
     safe_println!("[FAIL] No plaintext found with XOR crack.");
+    false
 }
 
 const VALID_CONTEXTS: &[&str] = &[
     "generic", "network", "filesystem", "shadow", "database", "sql", "memory", "blockchain",
 ];
 
-fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &str) {
+fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &str) -> bool {
     let context = match context_str.to_lowercase().as_str() {
         "network" => ScanningContext::Network,
         "filesystem" | "shadow" => ScanningContext::Filesystem,
@@ -799,7 +817,7 @@ fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &st
             "results": results
         });
         safe_println!("{}", serde_json::to_string_pretty(&output).unwrap());
-        return;
+        return true;
     }
 
     safe_println!("\n[INPUT]        : {}", input.white().bold());
@@ -938,14 +956,15 @@ fn analyze_single_input(input: &str, json: bool, verbose: bool, context_str: &st
         );
         safe_println!("=================================================================");
     }
+    true
 }
 
-fn analyze_file(path: &str, json: bool) {
+fn analyze_file(path: &str, json: bool) -> bool {
     let file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(error) => {
             safe_println!("[FAIL] cannot open {}: {}", path, error);
-            return;
+            return false;
         }
     };
     let reader = io::BufReader::new(file);
@@ -960,6 +979,7 @@ fn analyze_file(path: &str, json: bool) {
             }
         }
     }
+    true
 }
 
 fn detect_path_file_type(path: &std::path::Path) -> String {
@@ -1012,7 +1032,7 @@ fn preview_strings_from_path(path: &std::path::Path, min_len: usize, limit: usiz
     }
 }
 
-fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool) {
+fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool) -> bool {
     // Reject non-regular files that would block or cause issues
     if !path.is_dir() {
         match path.metadata() {
@@ -1030,7 +1050,7 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
                     } else {
                         safe_println!("{}", format!("[FAIL] forensic scan: {}", msg).red());
                     }
-                    return;
+                    return false;
                 }
             }
             Err(e) => {
@@ -1040,7 +1060,7 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
                 } else {
                     safe_println!("{}", format!("[FAIL] forensic scan: {}", msg).red());
                 }
-                return;
+                return false;
             }
         }
     }
@@ -1049,7 +1069,7 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
         if json {
             let report = hashendra::forensics::directory::scan_directory(path, extract_artifacts);
             safe_println!("{}", serde_json::to_string_pretty(&report).unwrap());
-            return;
+            return true;
         }
 
         safe_println!(
@@ -1134,8 +1154,9 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
                 });
                 safe_println!("{}", serde_json::to_string_pretty(&output).unwrap());
             } else {
-                safe_println!("{}", format!("Error mapping file: {}", e).red());
+                safe_println!("{}", format!("[FAIL] cannot map file: {}", e).red());
             }
+            return false;
         } else {
             if json {
                 if let Some(report) = manager.build_report(extract_artifacts) {
@@ -1148,7 +1169,7 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
                     });
                     safe_println!("{}", serde_json::to_string_pretty(&output).unwrap());
                 }
-                return;
+                return true;
             }
 
             print_path_metadata(path);
@@ -1157,6 +1178,7 @@ fn run_forensic_scan(path: &std::path::Path, json: bool, extract_artifacts: bool
             preview_strings_from_path(path, 8, 8);
         }
     }
+    true
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1442,7 +1464,7 @@ fn format_jwt_segment(segment: &str) -> Option<String> {
     })
 }
 
-fn run_forensic_disk(opts: DiskOptions<'_>) {
+fn run_forensic_disk(opts: DiskOptions<'_>) -> bool {
     let DiskOptions {
         path,
         json,
@@ -1471,12 +1493,14 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
             }
-            return;
+            return false;
         }
     };
 
     match hint {
-        ForensicFilesystemHint::Auto => run_disk_inspect(path, json, sector_size),
+            ForensicFilesystemHint::Auto => {
+                return run_disk_inspect(path, json, sector_size);
+            }
         ForensicFilesystemHint::Ntfs => {
             let selected_offset = if offset != 0 {
                 offset
@@ -1495,11 +1519,11 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                             safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
                             run_disk_inspect(path, false, sector_size);
                         }
-                        return;
+                        return false;
                     }
                 }
             };
-            run_ntfs_inspect(InspectOptions {
+            return run_ntfs_inspect(InspectOptions {
                 path,
                 json,
                 offset: selected_offset,
@@ -1508,7 +1532,7 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                 include_directories,
                 extract_data,
                 overwrite,
-            });
+            })
         }
         ForensicFilesystemHint::Fat32 => {
             let selected_offset = if offset != 0 {
@@ -1532,11 +1556,11 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                             safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
                             run_disk_inspect(path, false, sector_size);
                         }
-                        return;
+                        return false;
                     }
                 }
             };
-            run_fat_inspect(InspectOptions {
+            return run_fat_inspect(InspectOptions {
                 path,
                 json,
                 offset: selected_offset,
@@ -1566,11 +1590,11 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                             safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
                             run_disk_inspect(path, false, sector_size);
                         }
-                        return;
+                        return false;
                     }
                 }
             };
-            run_ext_inspect(InspectOptions {
+            return run_ext_inspect(InspectOptions {
                 path,
                 json,
                 offset: selected_offset,
@@ -1579,7 +1603,7 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                 include_directories,
                 extract_data,
                 overwrite,
-            });
+            })
         }
         other => {
             let hint_name = filesystem_hint_name(other);
@@ -1598,7 +1622,7 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                 } else {
                     safe_println!("{}", format!("[NOTE] {}", note).yellow());
                 }
-                return;
+                return true;
             }
 
             let target_kinds = filesystem_hint_target_kinds(other);
@@ -1621,7 +1645,7 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                             safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
                             run_disk_inspect(path, false, sector_size);
                         }
-                        return;
+                        return false;
                     }
                 }
             };
@@ -1678,6 +1702,7 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                             .red()
                         );
                     }
+                    return false;
                 }
                 Err(error) => {
                     if json {
@@ -1691,13 +1716,15 @@ fn run_forensic_disk(opts: DiskOptions<'_>) {
                     } else {
                         safe_println!("{}", format!("[FAIL] forensic disk: {}", error).red());
                     }
+                    return false;
                 }
             }
         }
     }
+    true
 }
 
-fn run_disk_inspect(path: &std::path::Path, json: bool, sector_size: usize) {
+fn run_disk_inspect(path: &std::path::Path, json: bool, sector_size: usize) -> bool {
     match hashendra::forensics::disk::inspect_disk_image(path, sector_size) {
         Ok(report) => {
             if json {
@@ -1705,6 +1732,7 @@ fn run_disk_inspect(path: &std::path::Path, json: bool, sector_size: usize) {
             } else {
                 hashendra::forensics::disk::print_disk_layout(&report);
             }
+            true
         }
         Err(error) => {
             if json {
@@ -1716,11 +1744,12 @@ fn run_disk_inspect(path: &std::path::Path, json: bool, sector_size: usize) {
             } else {
                 safe_println!("{}", format!("[FAIL] disk: {}", error).red());
             }
+            false
         }
     }
 }
 
-fn run_ntfs_inspect(opts: InspectOptions<'_>) {
+fn run_ntfs_inspect(opts: InspectOptions<'_>) -> bool {
     let InspectOptions {
         path,
         json,
@@ -1747,6 +1776,7 @@ fn run_ntfs_inspect(opts: InspectOptions<'_>) {
             } else {
                 hashendra::forensics::ntfs::print_ntfs_report(&report);
             }
+            true
         }
         Err(error) => {
             if json {
@@ -1759,11 +1789,12 @@ fn run_ntfs_inspect(opts: InspectOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] ntfs: {}", error).red());
             }
+            false
         }
     }
 }
 
-fn run_ext_inspect(opts: InspectOptions<'_>) {
+fn run_ext_inspect(opts: InspectOptions<'_>) -> bool {
     let InspectOptions {
         path,
         json,
@@ -1790,6 +1821,7 @@ fn run_ext_inspect(opts: InspectOptions<'_>) {
             } else {
                 hashendra::forensics::ext::print_ext_report(&report);
             }
+            true
         }
         Err(error) => {
             if json {
@@ -1802,11 +1834,12 @@ fn run_ext_inspect(opts: InspectOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] ext: {}", error).red());
             }
+            false
         }
     }
 }
 
-fn run_fat_inspect(opts: InspectOptions<'_>) {
+fn run_fat_inspect(opts: InspectOptions<'_>) -> bool {
     let InspectOptions {
         path,
         json,
@@ -1833,6 +1866,7 @@ fn run_fat_inspect(opts: InspectOptions<'_>) {
             } else {
                 hashendra::forensics::fat::print_fat_report(&report);
             }
+            true
         }
         Err(error) => {
             if json {
@@ -1845,11 +1879,12 @@ fn run_fat_inspect(opts: InspectOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] fat: {}", error).red());
             }
+            false
         }
     }
 }
 
-fn run_carve(opts: CarveOptions<'_>) {
+fn run_carve(opts: CarveOptions<'_>) -> bool {
     let CarveOptions {
         path,
         input,
@@ -1889,7 +1924,7 @@ fn run_carve(opts: CarveOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] config: {}", error).red());
             }
-            return;
+            return false;
         }
     };
 
@@ -1909,7 +1944,7 @@ fn run_carve(opts: CarveOptions<'_>) {
                 );
             }
         }
-        return;
+        return true;
     }
 
     let path = input.or(path);
@@ -1918,7 +1953,7 @@ fn run_carve(opts: CarveOptions<'_>) {
             "{}",
             "[FAIL] carve requires a path or --input unless --list-types is used".red()
         );
-        return;
+        return false;
     };
 
     let carve_path = std::path::Path::new(path);
@@ -1953,7 +1988,7 @@ fn run_carve(opts: CarveOptions<'_>) {
         Ok(report) => {
             if json {
                 safe_println!("{}", serde_json::to_string_pretty(&report).unwrap());
-                return;
+                return true;
             }
 
             safe_println!(
@@ -2047,6 +2082,7 @@ fn run_carve(opts: CarveOptions<'_>) {
             if let Some(audit_path) = &report.audit_path {
                 safe_println!("\n[AUDIT] {}", audit_path.cyan());
             }
+            true
         }
         Err(error) => {
             if json {
@@ -2058,6 +2094,7 @@ fn run_carve(opts: CarveOptions<'_>) {
             } else {
                 safe_println!("{}", format!("[FAIL] carve: {}", error).red());
             }
+            false
         }
     }
 }
@@ -2113,7 +2150,7 @@ fn apply_rot(text: &str, shift: u8) -> String {
         .collect()
 }
 
-fn run_workshop(initial_input: Option<String>) {
+fn run_workshop(initial_input: Option<String>) -> bool {
     let mut current = initial_input.unwrap_or_default();
     let mut history: Vec<String> = vec![current.clone()];
     let mut context = "generic".to_string();
@@ -2482,6 +2519,7 @@ fn run_workshop(initial_input: Option<String>) {
             safe_println!("  [OK] Current text set to input.");
         }
     }
+    true
 }
 
 // ──────────────────────────────────────────
@@ -2509,7 +2547,7 @@ fn print_encryption_ciphers() {
     }
 }
 
-fn handle_hash(input: &str, algorithm: Option<&str>) {
+fn handle_hash(input: &str, algorithm: Option<&str>) -> bool {
     let algos: Vec<HashAlgorithm> = if let Some(name) = algorithm {
         match HashAlgorithm::from_name(name) {
             Some(a) => vec![a],
@@ -2519,7 +2557,7 @@ fn handle_hash(input: &str, algorithm: Option<&str>) {
                     "[ERROR]".red().bold(),
                     name
                 );
-                return;
+                return false;
             }
         }
     } else {
@@ -2546,14 +2584,16 @@ fn handle_hash(input: &str, algorithm: Option<&str>) {
             hex
         );
     }
+    true
 }
 
-fn handle_encode(input: &str, format: &str) {
+fn handle_encode(input: &str, format: &str) -> bool {
     let result = encode_to_format(input, format);
     match result {
         Ok(encoded) => {
             safe_println!("{}", "\n── Encoded Output ──".green().bold());
             safe_println!("{}", encoded);
+            true
         }
         Err(e) => {
             safe_println!(
@@ -2561,11 +2601,12 @@ fn handle_encode(input: &str, format: &str) {
                 "[ERROR]".red().bold(),
                 e
             );
+            false
         }
     }
 }
 
-fn handle_encrypt(input: &str, cipher: &str, key: &Option<String>, _param: &Option<String>) {
+fn handle_encrypt(input: &str, cipher: &str, key: &Option<String>, _param: &Option<String>) -> bool {
     use hashendra::core::scanner::*;
 
     safe_println!("{}", "\n── Encrypted Output ──".green().bold());
@@ -2592,7 +2633,7 @@ fn handle_encrypt(input: &str, cipher: &str, key: &Option<String>, _param: &Opti
             let k = key.as_deref().unwrap_or("key").as_bytes().to_vec();
             if k.is_empty() {
                 safe_println!("{} Key cannot be empty for XOR cipher.", "[ERROR]".red().bold());
-                return;
+                return false;
             }
             let encrypted = xor_encrypt(input.as_bytes(), &k);
             let hex = encrypted.iter().map(|b| format!("{:02x}", b)).collect::<String>();
@@ -2620,16 +2661,22 @@ fn handle_encrypt(input: &str, cipher: &str, key: &Option<String>, _param: &Opti
                 "[ERROR]".red().bold(),
                 cipher
             );
-            return;
+            return false;
         }
     };
 
     match result {
-        Some(output) => safe_println!("{}", output),
-        None => safe_println!(
-            "{} Encryption failed. Check parameters.",
-            "[ERROR]".red().bold()
-        ),
+        Some(output) => {
+            safe_println!("{}", output);
+            true
+        }
+        None => {
+            safe_println!(
+                "{} Encryption failed. Check parameters.",
+                "[ERROR]".red().bold()
+            );
+            false
+        }
     }
 }
 

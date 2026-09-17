@@ -44,6 +44,8 @@ pub struct DiskLayoutReport {
 
 pub fn inspect_disk_image(path: &Path, sector_size: usize) -> io::Result<DiskLayoutReport> {
     let file = File::open(path)?;
+    // SAFETY: the file is opened read-only and never truncated or
+    // written while mapped; the mapping is only read.
     let mmap = unsafe { Mmap::map(&file)? };
     Ok(inspect_disk_bytes(
         &mmap[..],
@@ -58,6 +60,8 @@ pub fn inspect_filesystem_image(
     sector_size: usize,
 ) -> io::Result<Option<FilesystemVolume>> {
     let file = File::open(path)?;
+    // SAFETY: the file is opened read-only and never truncated or
+    // written while mapped; the mapping is only read.
     let mmap = unsafe { Mmap::map(&file)? };
     Ok(inspect_filesystem_bytes(&mmap[..], offset, sector_size))
 }

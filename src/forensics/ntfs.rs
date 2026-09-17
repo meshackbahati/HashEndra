@@ -182,6 +182,8 @@ enum StreamKind {
 
 pub fn inspect_ntfs_image(path: &Path, options: &NtfsOptions) -> io::Result<NtfsReport> {
     let file = File::open(path)?;
+    // SAFETY: the file is opened read-only and never truncated or
+    // written while mapped; the mapping is only read.
     let mmap = unsafe { Mmap::map(&file)? };
     inspect_ntfs_bytes(&mmap[..], path.display().to_string(), options)
 }

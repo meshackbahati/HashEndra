@@ -1,4 +1,5 @@
 use crate::core::cryptanalysis::chi_squared_score;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// Automatically cracks a Caesar/ROT cipher by testing all 26 shifts
 /// and choosing the one with the best Chi-Squared score.
@@ -494,11 +495,21 @@ pub fn bifid_decode(text: &str, key: &str, period: usize) -> String {
     result
 }
 
+static SEED: AtomicU32 = AtomicU32::new(12345);
+
+/// Deterministic LCG for hill-climbing restarts. Atomic so the cracker stays
+/// sound if it ever runs off the main thread; sequence matches the old
+/// single-threaded order when uncontended.
 fn rand_simple() -> u32 {
-    static mut SEED: u32 = 12345;
-    unsafe {
-        SEED = SEED.wrapping_mul(1103515245).wrapping_add(12345);
-        SEED & 0x7FFFFFFF
+    let mut prev = SEED.load(Ordering::Relaxed);
+    loop {
+        let next = prev
+            .wrapping_mul(1103515245)
+            .wrapping_add(12345);
+        match SEED.compare_exchange_weak(prev, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next & 0x7FFFFFFF,
+            Err(actual) => prev = actual,
+        }
     }
 }
 

@@ -873,8 +873,17 @@ pub fn decode_octal(input: &str) -> Option<Vec<u8>> {
     }
 }
 
-pub fn decode_ascii85(input: &str) -> Option<Vec<u8>> {
-    let trimmed = input.trim();
+/// Value of one 5-character Ascii85 group. 85^5 - 1 exceeds u32, so
+/// accumulate wide and reject over-range groups (invalid per spec) instead
+/// of overflowing.
+fn ascii85_group_value(block: &[u32]) -> Option<u32> {
+    let value: u64 = block
+        .iter()
+        .fold(0u64, |acc, digit| acc * 85 + u64::from(*digit));
+    u32::try_from(value).ok()
+}
+
+pub fn decode_ascii85(input: &str) -> Option<Vec<u8>> {    let trimmed = input.trim();
 
     // Strip optional Adobe delimiters
     let body = if trimmed.starts_with("<~") && trimmed.ends_with("~>") {
@@ -907,7 +916,7 @@ pub fn decode_ascii85(input: &str) -> Option<Vec<u8>> {
 
         block.push((ch as u32) - 33);
         if block.len() == 5 {
-            let value = block.iter().fold(0u32, |acc, digit| acc * 85 + digit);
+            let value = ascii85_group_value(&block)?;
             data.extend_from_slice(&value.to_be_bytes());
             block.clear();
         }
@@ -916,7 +925,7 @@ pub fn decode_ascii85(input: &str) -> Option<Vec<u8>> {
     if !block.is_empty() {
         let original_len = block.len();
         block.resize(5, 84);
-        let value = block.iter().fold(0u32, |acc, digit| acc * 85 + digit);
+        let value = ascii85_group_value(&block)?;
         let bytes = value.to_be_bytes();
         data.extend_from_slice(&bytes[..original_len - 1]);
     }
@@ -1339,4 +1348,22 @@ pub fn columnar_encrypt(input: &str, key: &str) -> String {
     }
     }
     result
+}
+
+#[cfg(test)]
+mod ascii85_tests {
+    use super::*;
+
+    #[test]
+    fn max_group_is_rejected_not_overflowed() {
+        // 85^5 - 1 exceeds u32; must return None, never panic.
+        assert_eq!(decode_ascii85("uuuuu"), None);
+    }
+
+    #[test]
+    fn roundtrip_hello() {
+        let encoded = crate::core::encoder::encode_ascii85(b"Hello, world!");
+        let decoded = decode_ascii85(&encoded).unwrap();
+        assert_eq!(decoded, b"Hello, world!");
+    }
 }

@@ -29,6 +29,8 @@ impl FileManager {
     pub fn map_file(&mut self, path: &str) -> Result<()> {
         self.path = Some(PathBuf::from(path));
         let file = File::open(path)?;
+        // SAFETY: the file is opened read-only and never truncated or
+        // written while mapped; the mapping is only read.
         let mmap = unsafe { Mmap::map(&file)? };
         self.mmap = Some(mmap);
         Ok(())

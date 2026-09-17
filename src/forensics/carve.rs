@@ -557,6 +557,8 @@ pub fn carve_path(
         let Ok(file) = File::open(&source_path) else {
             continue;
         };
+        // SAFETY: the file is opened read-only and never truncated or
+        // written while mapped; the mapping is only read.
         let Ok(mmap) = (unsafe { Mmap::map(&file) }) else {
             continue;
         };

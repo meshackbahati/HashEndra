@@ -122,6 +122,8 @@ enum DirSource {
 
 pub fn inspect_fat_image(path: &Path, options: &FatOptions) -> io::Result<FatReport> {
     let file = File::open(path)?;
+    // SAFETY: the file is opened read-only and never truncated or
+    // written while mapped; the mapping is only read.
     let mmap = unsafe { Mmap::map(&file)? };
     inspect_fat_bytes(&mmap[..], path.display().to_string(), options)
 }

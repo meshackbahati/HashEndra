@@ -125,6 +125,8 @@ struct InodeRecord {
 
 pub fn inspect_ext_image(path: &Path, options: &ExtOptions) -> io::Result<ExtReport> {
     let file = File::open(path)?;
+    // SAFETY: the file is opened read-only and never truncated or
+    // written while mapped; the mapping is only read.
     let mmap = unsafe { Mmap::map(&file)? };
     inspect_ext_bytes(&mmap[..], path.display().to_string(), options)
 }
