@@ -2,13 +2,13 @@
 
 ```mermaid
 graph TB
-    CLI[CLI Entry: src/main.rs]
+    CLI[CLI Entry: src/main.rs<br/>+ cli.rs, handlers/]
     LIB[lib.rs<br/>4 modules]
 
     subgraph core["core/"]
-        SCANNER[scanner.rs<br/>Decoders, entropy,<br/>charset detection]
+        SCANNER[scanner/<br/>mod + score,<br/>decode, codecs]
         PATTERNS[patterns.rs<br/>Signature scanning,<br/>confidence scoring]
-        RECURSIVE[recursive_engine.rs<br/>Multi-layer unwrap]
+        RECURSIVE[recursive_engine.rs<br/>+ engine_rules.rs<br/>Multi-layer unwrap]
         CRYPTANALYSIS[cryptanalysis.rs<br/>Chi-squared, freq analysis]
         ENCODER[encoder.rs<br/>Base64/32/58/85, hex,<br/>URL, HTML, binary, morse]
         HASHER[hasher.rs<br/>MD5, SHA1/2/3, BLAKE3]
@@ -16,20 +16,20 @@ graph TB
     end
 
     subgraph detectors["detectors/"]
-        HASHES[hashes.rs<br/>130+ hash sigs]
-        ENCODINGS[encodings.rs<br/>20+ encoding sigs]
+        HASHES[hashes/<br/>85 sigs: digests,<br/>kdf, apps, keys]
+        ENCODINGS[encodings.rs<br/>28 encoding sigs]
         CIPHERS[ciphers.rs<br/>Classical cipher sigs]
-        CLASSIC[classic_ciphers.rs<br/>Auto-crack: Caesar,<br/>Vigenere, Affine, ROT]
+        CLASSIC[classic_ciphers.rs<br/>+ classic_transposition.rs<br/>Auto-crack ciphers]
         STEGO[stego.rs<br/>File signatures,<br/>magic bytes, carving]
     end
 
     subgraph forensics["forensics/"]
-        CARVE[carve.rs<br/>Profile-based file carving<br/>ZIP/TAR expansion<br/>Deduplication]
-        DISK[disk.rs<br/>MBR/GPT/APM parsing,<br/>filesystem detection]
-        NTFS[ntfs.rs<br/>MFT, attributes,<br/>deleted entry recovery]
-        FAT[fat.rs<br/>BPB, FAT12/16/32,<br/>deleted entry recovery]
-        EXT[ext.rs<br/>Superblock, inodes,<br/>deleted inode recovery]
-        INSPECT[inspect.rs<br/>Metadata: JPEG EXIF,<br/>MP3 ID3, OOXML,<br/>PNG, PDF, ELF, etc.]
+        CARVE[carve/<br/>profiles, scan,<br/>containers, config]
+        DISK[disk/<br/>layout, fingerprint]
+        NTFS[ntfs/<br/>parse, recover, report]
+        FAT[fat/<br/>parse, recover]
+        EXT[ext/<br/>parse]
+        INSPECT[inspect/<br/>images, media, audio,<br/>docs, exec, data]
         REPORT[report.rs<br/>Forensic report builder]
         DIRECTORY[directory.rs<br/>Recursive dir scan]
         STRINGS[strings.rs<br/>ASCII / UTF-16<br/>string extraction]
@@ -88,7 +88,7 @@ sequenceDiagram
     participant U as User
     participant CLI as CLI
     participant P as patterns.rs
-    participant S as scanner.rs
+    participant S as scanner/
     participant D as detectors/
 
     U->>CLI: hashendra <input>
@@ -106,7 +106,7 @@ sequenceDiagram
 flowchart TB
     DATA[Raw Bytes]
     subgraph Scan["Concurrent Signature Scan (Rayon)"]
-        PROFILES[20 CarveProfiles]
+        PROFILES[19 CarveProfiles]
         HEADER[Header matching]
     end
     subgraph Slice["Slice Determination"]

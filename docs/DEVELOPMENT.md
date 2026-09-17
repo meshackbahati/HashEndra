@@ -6,29 +6,40 @@ HashEndra follows a modular architecture with four public crates:
 
 ```
 src/
-├── main.rs              # CLI entry point (clap parsing, dispatch)
+├── main.rs              # Binary entry, dispatch (see cli.rs, handlers/)
+├── cli.rs               # Clap structs + dispatch option structs
+├── handlers/            # One module per command group
+│   ├── decode.rs        # deep-decrypt, decode, rot, xor
+│   ├── analyze.rs       # Single-input and batch analysis
+│   ├── scan.rs          # forensic scan
+│   ├── disk.rs          # forensic disk dispatcher
+│   ├── inspect.rs       # Filesystem-specific inspection
+│   ├── carve.rs         # forensic carve dispatcher
+│   ├── workshop.rs      # Interactive REPL
+│   └── compute.rs       # hash, encode, encrypt
 ├── lib.rs               # Re-exports four modules
 ├── core/                # Core detection/decoding engine
-│   ├── scanner.rs       #  Decoders, scoring, charset detection
+│   ├── scanner/         # mod (entropy/charset) + score, decode, codecs
 │   ├── patterns.rs      # Signature scanning, lazy_static compilation
 │   ├── encoder.rs       # 13 encoding functions
 │   ├── hasher.rs        # 6 hash algorithms
 │   ├── entropy.rs       # Rolling entropy, boundary detection
 │   ├── cryptanalysis.rs # Chi-squared, frequency analysis
-│   └── recursive_engine.rs  # Multi-layer unwrapping
+│   ├── recursive_engine.rs  # Multi-layer unwrapping (+ engine_rules.rs)
+│   └── engine_rules.rs  # Plaintext heuristics, crack acceptance rules
 ├── detectors/           # Detection signatures
-│   ├── hashes.rs        # 85 hash signatures
+│   ├── hashes/          # 85 signatures: digests, kdf, apps, keys
 │   ├── encodings.rs     # 28 encoding signatures
 │   ├── ciphers.rs       # Cipher signatures
-│   ├── classic_ciphers.rs   # Auto-crack ciphers
+│   ├── classic_ciphers.rs   # Auto-crack ciphers (+ classic_transposition.rs)
 │   └── stego.rs         # File magic byte signatures
 ├── forensics/           # Forensic analysis
-│   ├── carve.rs         # Profile-based file carving
-│   ├── disk.rs          # MBR/GPT/APM partition parsing
-│   ├── ntfs.rs          # NTFS MFT and data recovery
-│   ├── fat.rs           # FAT12/16/32 filesystem
-│   ├── ext.rs           # ext2/3/4 filesystem
-│   ├── inspect.rs       # Metadata extraction (20+ formats)
+│   ├── carve/           # profiles, scan, containers, config (+ engine)
+│   ├── disk/            # layout, fingerprint
+│   ├── ntfs/            # parse, recover, report
+│   ├── fat/             # parse, recover
+│   ├── ext/             # parse
+│   ├── inspect/         # images, media, audio, docs, exec, data, raster
 │   ├── report.rs        # Forensic report builder
 │   ├── directory.rs     # Recursive directory scanner
 │   ├── filetypes.rs     # File type detection
@@ -37,6 +48,10 @@ src/
     ├── io.rs            # safe_println! thread-safe macros
     └── io_manager.rs    # Memory-mapped I/O
 ```
+
+Rule: no source file over 500 lines. Test-only code lives in
+`<module>_tests.rs` next to its module, wired with `#[path]` so unit tests
+keep access to private items.
 
 ## Building
 
