@@ -97,6 +97,31 @@ pub fn affine_auto_crack(text: &str) -> (u8, u8, String, f32) {
     (best_a, best_b, best_text, best_score)
 }
 
+/// Decodes an Affine cipher with the given (a, b) key: D(y) = a_inv * (y - b).
+/// Returns None when `a` has no inverse mod 26.
+///
+/// ```
+/// use hashendra::detectors::classic_ciphers::affine_decrypt;
+/// assert_eq!(affine_decrypt("RCLLA", 5, 8).as_deref(), Some("HELLO"));
+/// ```
+pub fn affine_decrypt(text: &str, a: u8, b: u8) -> Option<String> {
+    let a_inv = (0..26).find(|i| (a as u16 * i) % 26 == 1)? as u8;
+    Some(
+        text.chars()
+            .map(|c| {
+                if c.is_ascii_alphabetic() {
+                    let base = if c.is_ascii_uppercase() { b'A' } else { b'a' };
+                    let x = c as u8 - base;
+                    let res = (a_inv as u16 * (x as u16 + 26 - b as u16 % 26)) % 26;
+                    (res as u8 + base) as char
+                } else {
+                    c
+                }
+            })
+            .collect(),
+    )
+}
+
 /// Decodes Baconian cipher (5-bit binary encoded as two types of characters).
 /// Supports the standard 24-character variant and the 26-character complete variant.
 pub fn bacon_decode(text: &str, char_a: char, char_b: char) -> Option<String> {

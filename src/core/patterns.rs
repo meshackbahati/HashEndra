@@ -1,6 +1,7 @@
 use crate::detectors::ciphers::get_cipher_signatures;
 use crate::detectors::encodings::get_encoding_signatures;
 use crate::detectors::hashes::get_hash_signatures;
+use crate::detectors::keys::get_key_signatures;
 use crate::detectors::stego::get_stego_signatures;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -31,6 +32,9 @@ pub enum DetectionType {
     Encoding,
     Cipher,
     Stego,
+    /// Key material and certificates: PEM blocks, JWK, SSH keys, OIDs.
+    /// Matched against raw input like Stego (no whitespace repair).
+    Key,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +57,7 @@ lazy_static! {
         let mut sigs = get_hash_signatures();
         sigs.extend(get_encoding_signatures());
         sigs.extend(get_cipher_signatures());
+        sigs.extend(get_key_signatures());
         sigs.extend(get_stego_signatures());
 
         // Load external signatures if present
@@ -125,7 +130,7 @@ pub fn scan_input(input: &str, context: ScanningContext) -> Vec<DetectionResult>
     let mut matched = Vec::new();
 
     for (sig, re) in COMPILED_PATTERNS.iter() {
-        let match_target = if matches!(sig.detection_type, DetectionType::Stego) {
+        let match_target = if matches!(sig.detection_type, DetectionType::Stego | DetectionType::Key) {
             input
         } else {
             &preprocessed

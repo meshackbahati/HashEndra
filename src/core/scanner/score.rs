@@ -284,6 +284,9 @@ pub fn score_detection(input: &str, sig: &Signature, context: &ScanningContext) 
             // Placeholder for stego scoring based on statistical anomalies
             score *= 0.5;
         }
+        DetectionType::Key => {
+            // Key/cert patterns are near-literal; trust the authored weight.
+        }
     }
     score.clamp(0.0, 1.0)
 }

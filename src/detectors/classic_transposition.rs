@@ -72,6 +72,16 @@ pub fn rail_fence_auto_crack(text: &str) -> (usize, String, f32) {
     (best_rails, best_text, best_score)
 }
 
+/// Column order for a string key: indices sorted by key byte,
+/// ties broken left to right. Byte-based to match `columnar_encrypt`
+/// exactly; use ASCII keys.
+pub fn columnar_order(key: &str) -> Vec<usize> {
+    let bytes = key.as_bytes();
+    let mut order: Vec<usize> = (0..bytes.len()).collect();
+    order.sort_by_key(|&i| (bytes[i], i));
+    order
+}
+
 /// Decodes a Columnar Transposition cipher with a given key (permutation).
 ///
 /// A single-column key is the identity:
