@@ -1,0 +1,115 @@
+# HashEndra build + release pipeline.
+#
+# Triggers:
+#   - push of a tag like v2.1.0  -> test, build all platforms, publish GitHub Release
+#   - manual dispatch            -> same, as a draft release for inspection
+#
+# Asset naming (install.sh depends on this exact scheme — keep in sync):
+#   hashendra-<target>.tar.gz   (linux, macOS)
+#   hashendra-<target>.zip       (windows)
+# Each archive contains the binary plus README.md and LICENSE.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (ubuntu, stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - name: tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VER="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          test "$TAG" = "$VER" || { echo "tag v$TAG != Cargo.toml $VER"; exit 1; }
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: stage package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          STAGE="stage/hashendra-${{ matrix.target }}"
+          mkdir -p "$STAGE"
+          cp "target/${{ matrix.target }}/release/hashendra" "$STAGE/"
+          cp README.md LICENSE "$STAGE/"
+          tar -czf "hashendra-${{ matrix.target }}.tar.gz" -C stage "hashendra-${{ matrix.target }}"
+      - name: stage package (windows)
+        if: runner.os == 'Windows'
+        run: |
+          $stage = "stage/hashendra-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/hashendra.exe" "$stage/"
+          Copy-Item README.md, LICENSE "$stage/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "hashendra-${{ matrix.target }}.zip"
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hashendra-${{ matrix.target }}
+          path: |
+            hashendra-${{ matrix.target }}.tar.gz
+            hashendra-${{ matrix.target }}.zip
+          if-no-files-found: ignore
+
+  publish:
+    name: publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: checksum
+        run: |
+          cd dist
+          sha256sum hashendra-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          generate_release_notes: true
+          files: |
+            dist/hashendra-*.tar.gz
+            dist/hashendra-*.zip
+            dist/SHA256SUMS.txt

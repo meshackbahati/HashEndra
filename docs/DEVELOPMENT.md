@@ -53,6 +53,19 @@ Rule: no source file over 500 lines. Test-only code lives in
 `<module>_tests.rs` next to its module, wired with `#[path]` so unit tests
 keep access to private items.
 
+## Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: clippy + tests,
+then release builds for Linux (x86_64, aarch64), macOS (Intel, Apple
+Silicon), and Windows (x86_64), published as a GitHub Release with
+SHA256SUMS. `install.sh` downloads these assets; keep its asset-name
+mapping in sync with the workflow matrix.
+
+```bash
+# Cut a release (update version in Cargo.toml first, then):
+git tag v2.1.0 && git push origin v2.1.0
+```
+
 ## Building
 
 ```bash

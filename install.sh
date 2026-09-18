@@ -1,228 +1,260 @@
 #!/usr/bin/env bash
 #
-# HashEndra Installation Script
-# Author: Meshack Bahati
-# GitHub: https://github.com/meshackbahati/HashEndra
+# HashEndra installer — fetches a prebuilt release binary when one exists
+# for your OS, otherwise builds from source.
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
-#   bash install.sh [--keep] [--prefix /usr/local] [--uninstall]
+#   bash install.sh [--version 2.0.0] [--prefix /usr/local] [--keep] [--from-source] [--uninstall]
 #
 # Options:
-#   --keep          Keep the cloned repository after installation
-#   --prefix DIR    Install binary to DIR/bin (default: /usr/local)
+#   --version VER   Install a specific release (default: latest)
+#   --prefix DIR    Install binary to DIR/bin (default: /usr/local, ~/.local fallback)
+#   --keep          Keep downloaded/cloned files after installation
+#   --from-source   Skip prebuilt binaries; clone and cargo build instead
 #   --uninstall     Remove HashEndra binary and exit
-
+#
 set -eo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-KEEP_REPO=false
+REPO="meshackbahati/HashEndra"
+VERSION=""
 INSTALL_PREFIX=""
+KEEP_FILES=false
+FROM_SOURCE=false
 DO_UNINSTALL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --keep) KEEP_REPO=true; shift ;;
+        --version) VERSION="$2"; shift 2 ;;
         --prefix) INSTALL_PREFIX="$2"; shift 2 ;;
+        --keep) KEEP_FILES=true; shift ;;
+        --from-source) FROM_SOURCE=true; shift ;;
         --uninstall) DO_UNINSTALL=true; shift ;;
-        *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
+        -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]:-$0}"; exit 0 ;;
+        *) echo "Unknown option: $1 (try --help)"; exit 1 ;;
     esac
 done
 
+log()  { printf '%s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
 # ----- Uninstall -----------------------------------------------------------
 if $DO_UNINSTALL; then
-    for dir in /usr/local/bin "$HOME/.local/bin" "$HOME/bin"; do
-        if [[ -f "$dir/hashendra" ]]; then
-            rm -f "$dir/hashendra"
-            echo -e "${GREEN}[+] Removed hashendra from $dir${NC}"
-        fi
+    for dir in /usr/local/bin "$HOME/.local/bin" "$HOME/bin" "$HOME/.cargo/bin"; do
+        for bin in "$dir/hashendra" "$dir/hashendra.exe"; do
+            if [[ -f "$bin" ]]; then
+                rm -f "$bin"
+                log "[+] Removed $bin"
+            fi
+        done
     done
-    echo -e "${GREEN}[+] HashEndra uninstalled.${NC}"
+    log "[+] HashEndra uninstalled."
     exit 0
 fi
 
-# ----- Banner --------------------------------------------------------------
 cat << "EOF"
   ___ ___  __  __  __ _  _ __   __ _  __ _  ___   ___
  / _ \ _ \/  \|  \|  \| |/ _ \ / _| |/ _| |/ _ \ / _ \
 | (_)  __/ () | |) | |) | (_) | (_| | (_| | (_) | (_) |
  \___\___|\__/|___/|___/ \___/ \__,_|\__,_|\___/ \___/
-              Universal Forensic Decryption Engine
+          identify hashes - decode strings - carve files
 EOF
-echo -e "${BLUE}------------------------------------------------------------------${NC}"
-echo -e "${BLUE}                     Installing HashEndra                         ${NC}"
-echo -e "${BLUE}              The Universal Forensic Decryption Engine            ${NC}"
-echo -e "${BLUE}                 Author: Meshack Bahati                           ${NC}"
-echo -e "${BLUE}------------------------------------------------------------------${NC}"
 
-# ----- OS Detection --------------------------------------------------------
+# ----- Detect platform -----------------------------------------------------
 OS="$(uname -s)"
 ARCH="$(uname -m)"
+log "[*] Detected: $OS $ARCH"
 
-echo -e "${BLUE}[*] Detected: $OS $ARCH${NC}"
-
+EXT="tar.gz"
 case "$OS" in
-    Linux)
-        DEFAULT_PREFIX="/usr/local"
-        SH_PATH_BASHRC="$HOME/.bashrc"
-        SH_PATH_ZSH="$HOME/.zshrc"
-        SUDO="sudo"
-        ;;
-    Darwin)
-        DEFAULT_PREFIX="/usr/local"
-        SH_PATH_BASHRC="$HOME/.bash_profile"
-        SH_PATH_ZSH="$HOME/.zshrc"
-        SUDO="sudo"
-        ;;
-    MINGW*|MSYS*|CYGWIN*)
-        echo -e "${YELLOW}[!] Windows detected (MSYS2/MinGW). Installing to %USERPROFILE%\\.cargo\\bin${NC}"
-        DEFAULT_PREFIX="$HOME/.cargo"
-        SH_PATH_BASHRC="$HOME/.bashrc"
-        SUDO=""
+    Linux)  TRIPLE_OS="unknown-linux-gnu" ;;
+    Darwin) TRIPLE_OS="apple-darwin" ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+        TRIPLE_OS="pc-windows-msvc"
+        EXT="zip"
         ;;
     *)
-        echo -e "${YELLOW}[!] Unknown OS: $OS. Falling back to user install.${NC}"
-        DEFAULT_PREFIX="$HOME/.local"
-        SH_PATH_BASHRC="$HOME/.bashrc"
-        SH_PATH_ZSH="$HOME/.zshrc"
-        SUDO=""
+        log "[!] Unsupported OS for prebuilt binaries: $OS"
+        TRIPLE_OS=""
         ;;
 esac
 
+case "$ARCH" in
+    x86_64|amd64) TRIPLE_ARCH="x86_64" ;;
+    arm64|aarch64) TRIPLE_ARCH="aarch64" ;;
+    *)
+        log "[!] Unsupported architecture for prebuilt binaries: $ARCH"
+        TRIPLE_ARCH=""
+        ;;
+esac
+
+ASSET=""
+if [[ -n "$TRIPLE_OS" && -n "$TRIPLE_ARCH" ]]; then
+    # If an older release lacks this asset the download 404s and we fall
+    # back to a source build automatically.
+    ASSET="hashendra-${TRIPLE_ARCH}-${TRIPLE_OS}.${EXT}"
+fi
+# Windows binary name inside the archive.
+BIN_NAME="hashendra"
+[[ "$EXT" == "zip" ]] && BIN_NAME="hashendra.exe"
+
+# ----- Resolve version -----------------------------------------------------
+if [[ -z "$VERSION" ]]; then
+    if have curl; then
+        VERSION="$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')"
+    elif have wget; then
+        VERSION="$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')"
+    fi
+    if [[ -z "$VERSION" ]]; then
+        log "[!] Could not determine latest release (need curl or wget). Falling back to source build."
+        FROM_SOURCE=true
+    else
+        log "[*] Latest release: v${VERSION}"
+    fi
+else
+    # Accept "2.0.0" or "v2.0.0".
+    VERSION="${VERSION#v}"
+    log "[*] Requested release: v${VERSION}"
+fi
+
+# ----- Install locations ---------------------------------------------------
+case "$OS" in
+    Linux|Darwin) DEFAULT_PREFIX="/usr/local" ;;
+    *)            DEFAULT_PREFIX="$HOME/.local" ;;
+esac
 INSTALL_PREFIX="${INSTALL_PREFIX:-$DEFAULT_PREFIX}"
 INSTALL_DIR="$INSTALL_PREFIX/bin"
+mkdir -p "$INSTALL_DIR" 2>/dev/null || {
+    INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
+    log "[!] Cannot write to $INSTALL_PREFIX/bin, using $INSTALL_DIR"
+}
 
-# ----- Locate source directory -------------------------------------------
-SCRIPT_DIR=""
-if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != bash ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-fi
-IN_REPO=false
-if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/Cargo.toml" ]] && grep -q 'name = "hashendra"' "$SCRIPT_DIR/Cargo.toml" 2>/dev/null; then
-    IN_REPO=true
-    REPO_DIR="$SCRIPT_DIR"
-fi
+install_binary() {
+    # $1 = file to install
+    local src="$1" dest="$INSTALL_DIR/hashendra"
+    [[ "$EXT" == "zip" ]] && dest="$INSTALL_DIR/hashendra.exe"
+    cp "$src" "$dest"
+    chmod +x "$dest" 2>/dev/null || true
+    log "[+] Installed to $dest"
+}
 
-TEMP_DIR=""
-if ! $IN_REPO; then
-    echo -e "${BLUE}[*] Cloning from GitHub...${NC}"
-    if ! command -v git &>/dev/null; then
-        echo -e "${RED}[!] Git is required. Please install git first.${NC}"
-        exit 1
+verify_binary() {
+    if [[ -x "$INSTALL_DIR/hashendra" ]]; then
+        "$INSTALL_DIR/hashendra" --version 2>/dev/null || true
+    elif [[ -x "$INSTALL_DIR/hashendra.exe" ]]; then
+        "$INSTALL_DIR/hashendra.exe" --version 2>/dev/null || true
     fi
-    TEMP_DIR="$(mktemp -d)"
-    git clone --depth 1 https://github.com/meshackbahati/HashEndra.git "$TEMP_DIR" 2>&1
-    REPO_DIR="$TEMP_DIR"
-    cd "$REPO_DIR"
-else
-    echo -e "${GREEN}[+] Found local repository at $REPO_DIR${NC}"
-    cd "$REPO_DIR"
-fi
+}
 
-# ----- Install Rust if missing --------------------------------------------
-if ! command -v rustc &>/dev/null; then
-    echo -e "${YELLOW}[!] Rust is not installed. Installing rustup (non-interactive)...${NC}"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y 2>&1
-    # Source it for this script
-    if [[ -f "$HOME/.cargo/env" ]]; then
-        # shellcheck disable=SC1091
-        source "$HOME/.cargo/env"
-    elif [[ -f "$HOME/.cargo/env" ]]; then
-        # shellcheck disable=SC1091
-        source "$HOME/.cargo/env"
+advise_path() {
+    if [[ ":$PATH:" == *":$INSTALL_DIR:"* ]]; then
+        return
     fi
-    echo -e "${GREEN}[+] Rust installed: $(rustc --version)${NC}"
-else
-    echo -e "${GREEN}[+] Rust $(rustc --version)${NC}"
+    log ""
+    log "[!] $INSTALL_DIR is not in your PATH."
+    log "    Add this to ~/.bashrc or ~/.zshrc:"
+    log "    export PATH=\"\$PATH:$INSTALL_DIR\""
+}
+
+# ----- Try prebuilt binary -------------------------------------------------
+download_asset() {
+    # $1 = url, $2 = output file. Returns 0 on success.
+    if have curl; then
+        curl -fSL --retry 2 -o "$2" "$1"
+    elif have wget; then
+        wget -O "$2" "$1"
+    else
+        return 1
+    fi
+}
+
+WORKDIR="$(mktemp -d)"
+cleanup() {
+    if ! $KEEP_FILES; then
+        rm -rf "$WORKDIR"
+    else
+        log "[*] Kept working files in $WORKDIR"
+    fi
+}
+trap cleanup EXIT
+
+INSTALLED=false
+if ! $FROM_SOURCE && [[ -n "$ASSET" && -n "$VERSION" ]]; then
+    URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ASSET}"
+    ARCHIVE="$WORKDIR/$ASSET"
+    log "[*] Downloading $ASSET ..."
+    if download_asset "$URL" "$ARCHIVE"; then
+        if [[ "$EXT" == "zip" ]]; then
+            if have unzip; then
+                unzip -o -q "$ARCHIVE" -d "$WORKDIR/pkg"
+            elif have 7z; then
+                7z x -y -o"$WORKDIR/pkg" "$ARCHIVE" >/dev/null
+            elif have powershell.exe; then
+                powershell.exe -NoProfile -Command "Expand-Archive -Force '$ARCHIVE' '$WORKDIR/pkg'"
+            else
+                log "[!] No unzip tool found (need unzip, 7z, or PowerShell)."
+            fi
+        else
+            tar -xzf "$ARCHIVE" -C "$WORKDIR"
+            mkdir -p "$WORKDIR/pkg" && mv "$WORKDIR"/hashendra-*/hashendra "$WORKDIR/pkg/" 2>/dev/null \
+                || mv "$WORKDIR"/hashendra "$WORKDIR/pkg/" 2>/dev/null || true
+        fi
+        FOUND="$(find "$WORKDIR/pkg" -name "$BIN_NAME" 2>/dev/null | head -n 1)"
+        if [[ -n "$FOUND" ]]; then
+            install_binary "$FOUND"
+            INSTALLED=true
+        else
+            log "[!] Archive did not contain $BIN_NAME. Falling back to source build."
+        fi
+    else
+        log "[!] No prebuilt binary for this platform/release (or no network). Falling back to source build."
+    fi
 fi
 
-if ! command -v cargo &>/dev/null; then
-    echo -e "${RED}[!] Cargo not found. Ensure ~/.cargo/bin is in your PATH.${NC}"
-    echo -e "${YELLOW}[*] Run: source \$HOME/.cargo/env${NC}"
+# ----- Fallback: build from source -----------------------------------------
+if ! $INSTALLED; then
+    if ! $FROM_SOURCE; then
+        log "[*] Building from source instead."
+    fi
+    for dep in git cargo rustc; do
+        if ! have "$dep"; then
+            if [[ "$dep" == "git" ]]; then
+                log "[!] git is required for source builds. Install git and rerun."; exit 1
+            fi
+            log "[!] Rust ($dep) not found. Installing rustup..."
+            if have curl; then
+                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            elif have wget; then
+                wget -qO- https://sh.rustup.rs | sh -s -- -y
+            else
+                log "[!] Need curl or wget to install Rust."; exit 1
+            fi
+            # shellcheck disable=SC1091
+            [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+        fi
+    done
+    export PATH="$HOME/.cargo/bin:$PATH"
+    SRC="$WORKDIR/src"
+    git clone --depth 1 --branch "v${VERSION:-main}" "https://github.com/${REPO}.git" "$SRC" 2>/dev/null \
+        || git clone --depth 1 "https://github.com/${REPO}.git" "$SRC"
+    BIN_NAME="hashendra"
+    EXT="tar.gz"
+    (cd "$SRC" && cargo build --release --locked)
+    install_binary "$SRC/target/release/hashendra"
+    INSTALLED=true
+fi
+
+# ----- Finish ---------------------------------------------------------------
+if $INSTALLED; then
+    verify_binary
+    advise_path
+    log ""
+    log "[*] Try: hashendra \"5d41402abc4b2a76b9719d911017c592\""
+    log "[+] Done."
+else
+    log "[!] Installation failed."
     exit 1
 fi
-
-# ----- Build ---------------------------------------------------------------
-echo -e "${BLUE}[*] Building HashEndra (release mode)...${NC}"
-cargo build --release 2>&1
-echo -e "${GREEN}[+] Build successful.${NC}"
-
-# ----- Install binary ------------------------------------------------------
-mkdir -p "$INSTALL_DIR"
-
-if cp target/release/hashendra "$INSTALL_DIR/hashendra"; then
-    echo -e "${GREEN}[+] Installed to $INSTALL_DIR/hashendra${NC}"
-
-    # Try system-wide symlink if we used sudo and prefix is /usr/local
-    if [[ "$INSTALL_PREFIX" == "/usr/local" ]] && command -v sudo &>/dev/null; then
-        # Already installed directly there via cp above
-        true
-    fi
-
-    # ----- PATH advice ------------------------------------------------------
-    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-        echo ""
-        echo -e "${YELLOW}[!] $INSTALL_DIR is not in your PATH.${NC}"
-        echo -e "${BLUE}[*] Add one of the following lines to your shell profile:${NC}"
-        case "$OS" in
-            Linux|Darwin)
-                echo -e "    export PATH=\"\$PATH:$INSTALL_DIR\"  # add to ${CYAN}~/.bashrc${NC} or ${CYAN}~/.zshrc${NC}"
-                ;;
-            MINGW*|MSYS*|CYGWIN*)
-                echo -e "    export PATH=\"\$PATH:$INSTALL_DIR\"  # add to ${CYAN}~/.bashrc${NC}"
-                ;;
-        esac
-        echo ""
-        # Offer to add it automatically
-        if [[ -t 0 ]]; then
-            echo -ne "${BLUE}[?] Automatically add to PATH? [Y/n] ${NC}"
-            read -r answer
-            if [[ -z "$answer" || "$answer" =~ ^[Yy] ]]; then
-                for rc in "$SH_PATH_BASHRC" "$SH_PATH_ZSH"; do
-                    if [[ -f "$rc" ]]; then
-                        echo "" >> "$rc"
-                        echo "# Added by HashEndra installer" >> "$rc"
-                        echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$rc"
-                        echo -e "${GREEN}[+] Added to $rc${NC}"
-                    fi
-                done
-            fi
-        fi
-    fi
-
-    echo ""
-    echo -e "${BLUE}[*] Quick test: ${GREEN}hashendra --help${NC}"
-    echo -e "${BLUE}[*] Example:    ${GREEN}hashendra \"5d41402abc4b2a76b9719d911017c592\"${NC}"
-    echo ""
-else
-    echo -e "${RED}[!] Failed to copy binary. Trying without sudo...${NC}"
-    if cp target/release/hashendra "$HOME/.local/bin/hashendra" 2>/dev/null; then
-        INSTALL_DIR="$HOME/.local/bin"
-        echo -e "${GREEN}[+] Installed to $INSTALL_DIR/hashendra${NC}"
-    else
-        mkdir -p "$HOME/bin"
-        cp target/release/hashendra "$HOME/bin/hashendra"
-        INSTALL_DIR="$HOME/bin"
-        echo -e "${GREEN}[+] Installed to $INSTALL_DIR/hashendra${NC}"
-    fi
-fi
-
-# ----- Cleanup -------------------------------------------------------------
-if [[ -n "$TEMP_DIR" ]] && ! $KEEP_REPO; then
-    echo -e "${BLUE}[*] Cleaning up temporary files...${NC}"
-    rm -rf "$TEMP_DIR"
-    echo -e "${GREEN}[+] Temporary repository removed.${NC}"
-elif $IN_REPO && ! $KEEP_REPO; then
-    echo ""
-    echo -e "${YELLOW}[!] You ran the installer from inside the repository.${NC}"
-    echo -e "${YELLOW}[!] The source files were NOT deleted. Delete them manually if desired:${NC}"
-    echo -e "    rm -rf \"$REPO_DIR\""
-fi
-
-echo -e "${GREEN}Installation Complete!${NC}"

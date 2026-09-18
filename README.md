@@ -85,9 +85,11 @@ architecture, detectors, forensics, configuration, development.
 curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
 ```
 
-This installs Rust if needed, builds release mode, and puts the binary on
-your PATH. Flags: `--keep` (keep the cloned repo), `--prefix <dir>`,
-`--uninstall`.
+This downloads a prebuilt binary for your platform when one exists
+(Linux x86_64/aarch64, macOS Intel/Apple Silicon, Windows x86_64),
+otherwise it clones the repo and builds from source (needs Rust).
+Flags: `--version 2.0.0` (pin a release), `--prefix DIR`,
+`--from-source` (always build), `--keep`, `--uninstall`.
 
 ### Manual
 
