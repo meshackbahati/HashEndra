@@ -39,7 +39,7 @@ architecture, detectors, forensics, configuration, development.
 
 ### Detection
 - **140+ built-in signatures** for hashes, KDFs, encodings, ciphers,
-  blockchain formats, and file markers — each with hashcat/john mode hints
+  blockchain formats, key material, and file markers — each with hashcat/john mode hints
   where one exists.
 - **Confidence scoring** from structure matching plus Shannon entropy. Scores
   are heuristics, printed as-is. Short inputs collide; that's expected.
@@ -143,6 +143,9 @@ Commands:
   update    Signature info (signatures ship with the binary)
   forensic  Scan files, inspect disks, and carve artifacts
   workshop  Start an interactive decoding workshop
+  crack     Crack a hash against a wordlist (streaming, low memory)
+  tls       Look up a TLS cipher suite by hex code (offline table)
+  evm       Look up an EVM function selector (offline table)
 
 Arguments:
   [INPUT]   The hash or encoded string to analyze
@@ -347,6 +350,38 @@ Exit code is 0 even when nothing is found — check output content, not `$?`.
 
 ---
 
+### 13. Password cracking
+
+Dictionary cracker for raw hashes (MD5, SHA-1/224/256/384/512, BLAKE3).
+The wordlist is memory-mapped and streamed — never loaded — so a 500K-line
+wordlist costs ~17 MB RSS. Candidates are hashed as raw bytes (no hex
+formatting in the hot loop) across an explicit rayon pool.
+
+```bash
+hashendra crack 5f4dcc3b5aa765d61d8327deb882cf99 -w rockyou.txt
+hashendra crack <hash> -w rockyou.txt --rules            # extended mutations
+hashendra crack <hash> -w rockyou.txt --speed eco        # quarter cores, laptop mode
+hashendra crack <hash> -w rockyou.txt --speed turbo -j   # all cores, JSON out
+```
+
+Light mutations (default): case variants plus 0-9 affixes. `--rules` adds
+two-digit affixes, years, and common suffixes. Exit 0 only when cracked.
+
+---
+
+### 14. TLS and EVM lookups
+
+Offline tables, no network:
+
+```bash
+hashendra tls 1301        # TLS_AES_128_GCM_SHA256, secure
+hashendra tls 0x0005      # TLS_RSA_WITH_RC4_128_SHA, broken
+hashendra evm a9059cbb    # transfer(address,uint256), ERC20
+hashendra evm 0xa9059cbb0000...   # pasted calldata works, first 4 bytes used
+```
+
+---
+
 ## Classical Cipher Suite
 
 | Cipher | Method |
@@ -387,7 +422,7 @@ up to 10 layers, stopping on cycles or plaintext-looking output.
 
 ## Signature Library
 
-~146 built-in signatures across:
+~170 built-in signatures across:
 
 - **Hashes**: MD4/MD5, SHA-1/224/256/384/512/3, RIPEMD, Whirlpool, Tiger,
   BLAKE2/3, Snefru, HAVAL, GOST, SM3, Streebog
@@ -395,8 +430,10 @@ up to 10 layers, stopping on cycles or plaintext-looking output.
   Cisco, MSSQL, MySQL, Oracle, WordPress, Drupal, Joomla
 - **Encodings**: Base64/32/58/85, Hex, URL, Punycode, UUencode, ROT13/47,
   EBCDIC, Morse, Binary, Octal
-- **Blockchain**: Bitcoin (P2PKH, P2SH, Bech32), Ethereum, Litecoin, Monero,
-  Ripple, IPFS CIDs, WIF keys
+- **Blockchain**: Bitcoin (P2PKH, P2SH, Bech32), Ethereum, Litecoin (Base58 + Bech32),
+  Monero, Ripple, Solana, IPFS CIDs, WIF keys
+- **Key material**: PEM blocks (RSA/EC/OpenSSH/PKCS#8/X.509/CSR/PGP), SSH public
+  keys, JWK, age recipients, Ansible Vault, PHC Scrypt, PQC OIDs (ML-KEM/ML-DSA/SLH-DSA)
 - **File markers**: PNG chunks, JPEG Exif, TIFF, GIF, BMP, WebP, RIFF,
   OpenPGP, ZIP, PDF, ELF, PE, Mach-O, RAR, 7z, OLE2
 - **Tokens & keys**: JWTs, AWS/Google/Stripe/GitHub/Slack/Twilio/SendGrid

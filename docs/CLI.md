@@ -92,6 +92,42 @@ Start an interactive decoding workshop.
 hashendra workshop
 ```
 
+### `crack`
+Dictionary-crack a raw hash against a wordlist. Streams the file via mmap;
+memory stays flat regardless of wordlist size.
+
+```
+hashendra crack 5f4dcc3b5aa765d61d8327deb882cf99 -w rockyou.txt
+hashendra crack <hash> -w rockyou.txt --format sha256 --rules --speed turbo
+hashendra crack <hash> -w rockyou.txt --jobs 2 --max-candidates 1000000 -j
+```
+
+| Flag | Description |
+|---|---|
+| `--wordlist, -w` | Wordlist file (required) |
+| `--format` | md5, sha1, sha256, … (default: auto-detect by length; 64-hex assumes SHA-256, use `--format blake3` to override) |
+| `--rules` | Extended mutations (default: light case/digit set) |
+| `--jobs` | Worker threads (default: from `--speed`) |
+| `--speed` | `eco` (quarter cores), `normal` (half), `turbo` (all) |
+| `--max-candidates` | Stop after N candidates |
+
+Exit 0 only when the password is found.
+
+### `tls`
+Look up a TLS cipher suite (offline table, IANA-based).
+
+```
+hashendra tls 1301
+hashendra tls 0xC02F
+```
+
+### `evm`
+Look up an EVM function selector (offline table, accepts full calldata).
+
+```
+hashendra evm a9059cbb
+```
+
 ## Options
 
 | Flag | Description | Example |
