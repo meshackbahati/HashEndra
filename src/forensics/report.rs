@@ -2,7 +2,7 @@ use crate::core::patterns::{DetectionResult, ScanningContext, scan_input};
 use crate::detectors::stego::{identify_file_signature, locate_file_end};
 use crate::forensics::carve::{CarveOptions, CarvedArtifact, carve_from_bytes};
 use crate::forensics::inspect::inspect_artifact;
-use crate::forensics::strings::{extract_printable_strings, extract_utf16le_strings};
+use crate::forensics::strings::{for_each_printable_string, for_each_utf16le_string};
 use crate::safe_println;
 use colored::*;
 use lazy_static::lazy_static;
@@ -49,17 +49,22 @@ pub fn build_forensic_report(
     path: Option<&Path>,
     extract_artifacts: bool,
 ) -> ForensicReport {
-    let ascii_strings = extract_printable_strings(data, 8);
-    let utf16_strings = extract_utf16le_strings(data, 4);
-    let mut reported = HashSet::new();
+    // Streamed: counts and hits computed inline so multi-GB inputs never
+    // materialize every string at once. No cross-chunk dedup set: string
+    // chunks are disjoint byte ranges, so an (offset, candidate) pair can
+    // only repeat inside one chunk — already handled by the per-chunk set
+    // in extract_forensic_candidates.
+    let mut ascii_count = 0usize;
+    let mut utf16_count = 0usize;
     let mut hits = Vec::new();
-
-    for (start, chunk) in &ascii_strings {
-        collect_hits(chunk, *start, "ascii", &mut reported, &mut hits);
-    }
-    for (start, chunk) in &utf16_strings {
-        collect_hits(chunk, *start, "utf16le", &mut reported, &mut hits);
-    }
+    for_each_printable_string(data, 8, &mut |start, chunk| {
+        ascii_count += 1;
+        collect_hits(chunk, start, "ascii", &mut hits);
+    });
+    for_each_utf16le_string(data, 4, &mut |start, chunk| {
+        utf16_count += 1;
+        collect_hits(chunk, start, "utf16le", &mut hits);
+    });
 
     let root_artifact = collect_root_artifact(data);
     let artifacts = collect_artifacts(data, path, extract_artifacts);
@@ -67,8 +72,8 @@ pub fn build_forensic_report(
     ForensicReport {
         size: data.len(),
         entropy: crate::core::scanner::calculate_entropy(data),
-        ascii_strings: ascii_strings.len(),
-        utf16_strings: utf16_strings.len(),
+        ascii_strings: ascii_count,
+        utf16_strings: utf16_count,
         root_artifact,
         hits,
         artifacts,
@@ -193,13 +198,9 @@ fn collect_hits(
     chunk: &str,
     start: usize,
     source: &'static str,
-    reported: &mut HashSet<(usize, String)>,
     hits: &mut Vec<ForensicHit>,
 ) {
     for (offset, candidate) in extract_forensic_candidates(chunk, start) {
-        if !reported.insert((offset, candidate.clone())) {
-            continue;
-        }
 
         let results = scan_input(&candidate, ScanningContext::Filesystem);
         let reportable: Vec<_> = results
@@ -275,16 +276,31 @@ pub(crate) fn extract_forensic_candidates(chunk: &str, base_offset: usize) -> Ve
         push_label_value_parts(&mut candidates, &mut seen, absolute_offset, token);
     }
 
+    // Regex-derived candidates are capped per chunk: a megabyte of hex
+    // digits yields hundreds of thousands of overlapping windows, and past
+    // a few dozen they are noise, not evidence. Token candidates above are
+    // already length-gated by looks_like_forensic_token.
+    const MAX_REGEX_CANDIDATES_PER_CHUNK: usize = 64;
+    let mut regex_hits = 0usize;
+
     for m in EMBEDDED_HEX_RE.find_iter(chunk) {
+        if regex_hits >= MAX_REGEX_CANDIDATES_PER_CHUNK {
+            break;
+        }
         push_candidate(
             &mut candidates,
             &mut seen,
             base_offset + m.start(),
             m.as_str(),
         );
+        regex_hits += 1;
     }
 
     for caps in ASSIGNMENT_VALUE_RE.captures_iter(chunk) {
+        if regex_hits >= MAX_REGEX_CANDIDATES_PER_CHUNK * 2 {
+            break;
+        }
+        regex_hits += 1;
         if let Some(value) = caps.name("value") {
             push_candidate(
                 &mut candidates,

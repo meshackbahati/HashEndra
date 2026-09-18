@@ -44,9 +44,13 @@ pub(crate) fn inspect_gzip(data: &[u8]) -> Option<ArtifactInspection> {
     if flags & 0x04 != 0 {
         let xlen = le_u16(data, cursor)? as usize;
         cursor = cursor.checked_add(2 + xlen)?;
+        if cursor > data.len() {
+            return None; // Truncated FEXTRA field.
+        }
     }
     let original_name = if flags & 0x08 != 0 {
-        let end = data[cursor..].iter().position(|&byte| byte == 0).map(|idx| cursor + idx)?;
+        let rest = data.get(cursor..)?;
+        let end = rest.iter().position(|&byte| byte == 0).map(|idx| cursor + idx)?;
         let name = String::from_utf8_lossy(&data[cursor..end]).to_string();
         Some(name)
     } else { None };
@@ -239,3 +243,29 @@ pub(crate) fn inspect_7z(data: &[u8]) -> Option<ArtifactInspection> {
 }
 
 // ── Tests ──────────────────────────────────────────────────
+
+#[cfg(test)]
+mod gzip_bounds_tests {
+    use super::*;
+
+    #[test]
+    fn fextra_past_eof_returns_none() {
+        // Magic + FHCRC-less flags with FEXTRA claiming 300 bytes in a 20-byte input.
+        let mut header = vec![0x1F, 0x8B, 0x08, 0x04, 0, 0, 0, 0, 0, 0xFF, 0x2C, 0x01];
+        header.extend_from_slice(&[0u8; 8]);
+        assert!(inspect_gzip(&header).is_none());
+    }
+
+    #[test]
+    fn fname_without_nul_returns_none() {
+        let mut header = vec![0x1F, 0x8B, 0x08, 0x08, 0, 0, 0, 0, 0, 0xFF];
+        header.extend_from_slice(b"unterminated");
+        assert!(inspect_gzip(&header).is_none());
+    }
+
+    #[test]
+    fn minimal_valid_header_parses() {
+        let header = [0x1F, 0x8B, 0x08, 0x00, 0, 0, 0, 0, 0, 0x03];
+        assert!(inspect_gzip(&header).is_some());
+    }
+}

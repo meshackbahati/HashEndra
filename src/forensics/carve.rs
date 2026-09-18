@@ -32,6 +32,41 @@ impl BytePattern {
         self.bytes.is_empty()
     }
 
+    /// Longest exact-byte run, for SIMD prefiltering with memmem.
+    /// Returns the run's start offset inside the pattern plus its bytes,
+    /// or None when fully wildcarded (caller falls back to a linear scan).
+    pub(crate) fn longest_exact_run(&self) -> Option<(usize, Vec<u8>)> {
+        let mut best = (0usize, 0usize);
+        let mut cur = 0usize;
+        let mut cur_len = 0usize;
+        for (i, b) in self.bytes.iter().enumerate() {
+            if b.is_some() {
+                if cur_len == 0 {
+                    cur = i;
+                }
+                cur_len += 1;
+            } else {
+                if cur_len > best.1 {
+                    best = (cur, cur_len);
+                }
+                cur_len = 0;
+            }
+        }
+        if cur_len > best.1 {
+            best = (cur, cur_len);
+        }
+        if best.1 == 0 {
+            return None;
+        }
+        Some((
+            best.0,
+            self.bytes[best.0..best.0 + best.1]
+                .iter()
+                .map(|b| b.unwrap_or(0))
+                .collect(),
+        ))
+    }
+
     pub fn matches_at(&self, data: &[u8], offset: usize) -> bool {
         let Some(window) = data.get(offset..offset.saturating_add(self.bytes.len())) else {
             return false;

@@ -225,33 +225,55 @@ pub(crate) fn print_path_metadata(path: &std::path::Path) {
     }
 }
 
-pub(crate) fn preview_strings_from_path(path: &std::path::Path, min_len: usize, limit: usize) {
-    match std::fs::read(path) {
-        Ok(data) => {
-            let mut flattened = hashendra::forensics::strings::flatten_string_lines(
-                hashendra::forensics::strings::extract_printable_strings(&data, min_len),
-                min_len.min(4),
-                "ascii",
-            );
-            flattened.extend(hashendra::forensics::strings::flatten_string_lines(
-                hashendra::forensics::strings::extract_utf16le_strings(&data, min_len / 2 + 1),
-                min_len.min(4),
-                "utf16le",
-            ));
-            safe_println!(
-                "{}",
-                format!(
-                    "[STRINGS] {} candidate strings (min {}, showing {})",
-                    flattened.len(),
-                    min_len,
-                    flattened.len().min(limit)
-                )
-                .cyan()
-            );
-            for (offset, encoding, value) in flattened.iter().take(limit) {
-                safe_println!("  0x{:08x} [{}] {}", offset, encoding, value);
+pub(crate) fn preview_strings_from_path(path: &std::path::Path, min_len: usize, limit: usize) -> bool {
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) => {
+            safe_println!("{}", format!("[FAIL] string extraction: {}", e).red());
+            return false;
+        }
+    };
+    // SAFETY: read-only mapping, never truncated or written while mapped.
+    let data = match unsafe { memmap2::Mmap::map(&file) } {
+        Ok(mmap) => mmap,
+        Err(e) => {
+            safe_println!("{}", format!("[FAIL] string extraction: {}", e).red());
+            return false;
+        }
+    };
+    // Streamed: count everything, print only the first `limit` lines.
+    // Same output shape as before, O(limit) memory instead of O(file).
+    // Buffered so the header still prints before the preview lines.
+    let mut total = 0usize;
+    let mut buffered: Vec<(usize, &'static str, String)> = Vec::new();
+    let mut show = |offset: usize, encoding: &'static str, value: &str| {
+        for line in value.lines() {
+            if line.len() >= min_len.min(4) {
+                total += 1;
+                if buffered.len() < limit {
+                    buffered.push((offset, encoding, line.to_string()));
+                }
             }
         }
-        Err(e) => safe_println!("{}", format!("[FAIL] string extraction: {}", e).red()),
+    };
+    hashendra::forensics::strings::for_each_printable_string(&data, min_len, &mut |offset, value| {
+        show(offset, "ascii", value);
+    });
+    hashendra::forensics::strings::for_each_utf16le_string(&data, min_len / 2 + 1, &mut |offset, value| {
+        show(offset, "utf16le", value);
+    });
+    safe_println!(
+        "{}",
+        format!(
+            "[STRINGS] {} candidate strings (min {}, showing {})",
+            total,
+            min_len,
+            total.min(limit)
+        )
+        .cyan()
+    );
+    for (offset, encoding, value) in &buffered {
+        safe_println!("  0x{:08x} [{}] {}", offset, encoding, value);
     }
+    true
 }

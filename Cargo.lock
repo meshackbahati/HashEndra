@@ -456,6 +456,7 @@ dependencies = [
  "kamadak-exif",
  "lazy_static",
  "md-5",
+ "memchr",
  "memmap2",
  "num-bigint",
  "quick-xml",

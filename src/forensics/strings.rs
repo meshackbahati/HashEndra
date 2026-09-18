@@ -1,3 +1,66 @@
+/// Streaming printable-string scan: calls `f` per run without materializing
+/// the full list. Use this for large inputs; the `Vec` variant is for small
+/// previews only.
+pub fn for_each_printable_string(data: &[u8], min_len: usize, f: &mut impl FnMut(usize, &str)) {
+    let mut chunk_start: Option<usize> = None;
+    let flush = |start: usize, end: usize, f: &mut dyn FnMut(usize, &str)| {
+        if end - start >= min_len
+            && let Ok(chunk) = std::str::from_utf8(&data[start..end]) {
+                f(start, chunk);
+            }
+    };
+
+    for (idx, &byte) in data.iter().enumerate() {
+        if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
+            if chunk_start.is_none() {
+                chunk_start = Some(idx);
+            }
+        } else if let Some(start) = chunk_start.take() {
+            flush(start, idx, &mut *f);
+        }
+    }
+
+    if let Some(start) = chunk_start {
+        flush(start, data.len(), &mut *f);
+    }
+}
+
+/// Streaming UTF-16LE scan with a reused decode buffer (no per-string alloc).
+pub fn for_each_utf16le_string(data: &[u8], min_chars: usize, f: &mut impl FnMut(usize, &str)) {
+    let mut scratch = String::new();
+    let mut start = 0usize;
+
+    while start + 1 < data.len() {
+        let mut cursor = start;
+        scratch.clear();
+
+        while cursor + 1 < data.len() {
+            let value = u16::from_le_bytes([data[cursor], data[cursor + 1]]);
+            let Some(ch) = char::from_u32(value as u32) else {
+                break;
+            };
+
+            if ch.is_control() && !ch.is_whitespace() {
+                break;
+            }
+
+            if !(ch.is_ascii_graphic() || ch.is_ascii_whitespace()) {
+                break;
+            }
+
+            scratch.push(ch);
+            cursor += 2;
+        }
+
+        if scratch.len() >= min_chars {
+            f(start, &scratch);
+            start = cursor + 2;
+        } else {
+            start += 1;
+        }
+    }
+}
+
 pub fn extract_printable_strings(data: &[u8], min_len: usize) -> Vec<(usize, String)> {
     let mut strings = Vec::new();
     let mut chunk_start: Option<usize> = None;

@@ -9,6 +9,29 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+/// Candidate offsets for a header: SIMD memmem over its longest exact run,
+/// verified against the full (possibly wildcarded) pattern. Fully wildcarded
+/// patterns fall back to a linear scan.
+fn find_header_offsets(data: &[u8], header: &BytePattern) -> Vec<usize> {
+    let Some((run_start, run)) = header.longest_exact_run() else {
+        return (0..=data.len().saturating_sub(header.len()))
+            .filter(|&offset| header.matches_at(data, offset))
+            .collect();
+    };
+    let finder = memchr::memmem::Finder::new(&run);
+    finder
+        .find_iter(data)
+        .filter_map(|pos| {
+            let offset = pos.checked_sub(run_start)?;
+            if header.matches_at(data, offset) {
+                Some(offset)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 pub(crate) fn effective_profiles(options: &CarveOptions) -> Vec<CarveProfile> {
     let mut profiles = builtin_profiles();
     profiles.extend(options.profiles.clone());
@@ -36,8 +59,7 @@ pub(crate) fn iter_source_files(path: &Path, recursive: bool) -> Vec<PathBuf> {
     files
 }
 
-pub(crate) fn scan_profiles(data: &[u8], profiles: &[CarveProfile], quick: bool) -> Vec<ProfileMatch> {
-    let local_data = data;
+pub(crate) fn scan_profiles(data: &[u8], profiles: &[CarveProfile], quick: bool) -> Vec<ProfileMatch> {    let local_data = data;
     let mut matches: Vec<(usize, usize, usize)> = profiles
         .par_iter()
         .enumerate()
@@ -47,13 +69,10 @@ pub(crate) fn scan_profiles(data: &[u8], profiles: &[CarveProfile], quick: bool)
                 if header.is_empty() || header.len() > local_data.len() {
                     continue;
                 }
-                let max_offset = local_data.len() - header.len();
-                for offset in 0..=max_offset {
-                    if header.matches_at(local_data, offset) {
-                        profile_matches.push((offset, header.len(), profile_index));
-                        if quick {
-                            break;
-                        }
+                for offset in find_header_offsets(local_data, header) {
+                    profile_matches.push((offset, header.len(), profile_index));
+                    if quick {
+                        break;
                     }
                 }
                 if quick && !profile_matches.is_empty() {
