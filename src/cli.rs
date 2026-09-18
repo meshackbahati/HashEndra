@@ -209,6 +209,23 @@ pub(crate) enum Commands {
     },
     /// Start an interactive decoding workshop
     Workshop { input: Option<String> },
+    /// Crack a password hash against a wordlist (streaming, low memory)
+    Crack {
+        /// Hex-encoded hash to crack
+        hash: String,
+        #[arg(short, long, help = "Wordlist file, one candidate per line")]
+        wordlist: String,
+        #[arg(long, help = "Hash format: md5, sha1, sha256, ... (default: auto-detect by length)")]
+        format: Option<String>,
+        #[arg(long, help = "Extended mutation rules (default: light case/digit set)")]
+        rules: bool,
+        #[arg(long, help = "Worker threads (default: set by --speed)")]
+        jobs: Option<usize>,
+        #[arg(long, default_value = "normal", help = "Speed tier: eco, normal, turbo")]
+        speed: String,
+        #[arg(long, help = "Stop after N candidates (default: whole wordlist)")]
+        max_candidates: Option<u64>,
+    },
 }
 
 #[derive(Subcommand)]

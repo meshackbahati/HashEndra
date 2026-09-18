@@ -7,8 +7,8 @@ use colored::*;
 use handlers::{
     analyze_file, analyze_single_input, handle_decode, handle_deep_decrypt, handle_encode,
     handle_encrypt, handle_hash, handle_rot, handle_xor, print_banner, print_encoding_formats,
-    print_encryption_ciphers, print_hash_algorithms, run_carve, run_forensic_disk,
-    run_forensic_scan, run_workshop,
+    print_encryption_ciphers, print_hash_algorithms, run_carve, run_crack, run_forensic_disk,
+    run_forensic_scan, run_workshop, CrackArgs,
 };
 use hashendra::core::patterns::EXTERNAL_SIGNATURE_COUNT;
 use hashendra::safe_println;
@@ -259,6 +259,26 @@ fn main() -> std::process::ExitCode {
             Commands::Workshop { input } => {
                 print_banner();
                 ok &= run_workshop(input);
+            }
+            Commands::Crack {
+                hash,
+                wordlist,
+                format,
+                rules,
+                jobs,
+                speed,
+                max_candidates,
+            } => {
+                ok &= run_crack(CrackArgs {
+                    hash: &hash,
+                    wordlist: &wordlist,
+                    format: format.as_deref(),
+                    rules,
+                    jobs,
+                    speed: &speed,
+                    max_candidates,
+                    json: cli.json,
+                });
             }
         }
     } else {

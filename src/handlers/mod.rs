@@ -1,6 +1,7 @@
 pub mod analyze;
 pub mod carve;
 pub mod compute;
+pub mod crack;
 pub mod decode;
 pub mod disk;
 pub mod inspect;
@@ -13,6 +14,7 @@ pub(crate) use compute::{
     handle_encode, handle_encrypt, handle_hash, print_encoding_formats, print_encryption_ciphers,
     print_hash_algorithms,
 };
+pub(crate) use crack::{run_crack, CrackArgs};
 pub(crate) use decode::{handle_decode, handle_deep_decrypt, handle_rot, handle_xor};
 pub(crate) use disk::run_forensic_disk;
 pub(crate) use scan::run_forensic_scan;
