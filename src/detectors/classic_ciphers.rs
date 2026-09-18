@@ -231,6 +231,7 @@ pub fn simple_substitution_auto_crack(text: &str) -> (String, String, f32) {
     let mut current_map: Vec<char> = alpha.clone();
     let mut best_score = -10000.0;
     let mut best_map = current_map.clone();
+    seed_from_input(text);
 
     for _ in 0..1000 {
         let mut test_map = current_map.clone();
@@ -381,3 +382,27 @@ fn rand_simple() -> u32 {
     }
 }
 
+/// Reseed the hill-climber from the input. Same input cracks identically on
+/// every run; different inputs still explore different paths.
+fn seed_from_input(text: &str) {
+    let mut h: u32 = 0x811C_9DC5;
+    for b in text.bytes() {
+        h ^= u32::from(b);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    SEED.store(h | 1, Ordering::Relaxed);
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn substitution_crack_is_deterministic() {
+        let text = "ZIT ZQWYBTEU QF NBS BPRZQ QMHM NFTO XFKH QEBBO";
+        let first = simple_substitution_auto_crack(text);
+        let second = simple_substitution_auto_crack(text);
+        assert_eq!(first, second);
+    }
+}
