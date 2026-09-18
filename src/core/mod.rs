@@ -1,5 +1,7 @@
 pub mod cryptanalysis;
 pub mod crack;
+pub mod evm;
+pub mod tls;
 pub mod encoder;
 pub(crate) mod engine_rules;
 pub mod entropy;

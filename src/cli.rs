@@ -226,6 +226,16 @@ pub(crate) enum Commands {
         #[arg(long, help = "Stop after N candidates (default: whole wordlist)")]
         max_candidates: Option<u64>,
     },
+    /// Look up a TLS cipher suite by hex code (offline table)
+    Tls {
+        /// Suite code like 1301 or 0xC02F
+        code: String,
+    },
+    /// Look up an EVM function selector (offline table, accepts calldata)
+    Evm {
+        /// Selector like a9059cbb, with or without 0x
+        selector: String,
+    },
 }
 
 #[derive(Subcommand)]
