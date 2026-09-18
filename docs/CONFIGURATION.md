@@ -41,7 +41,7 @@ This file is a JSON array of `Signature` objects. If the file doesn't exist, no 
 | `name` | Yes | string | Displayed in detection results |
 | `description` | Yes | string | Shown alongside the name |
 | `pattern` | Yes | string | Rust regex. Must compile! |
-| `detection_type` | Yes | `"Hash"` / `"Encoding"` / `"Cipher"` / `"Stego"` | Category |
+| `detection_type` | Yes | `"Hash"` / `"Encoding"` / `"Cipher"` / `"Stego"` / `"Key"` | Category (`Key` matches raw input, like `Stego`) |
 | `confidence_weight` | Yes | float (0.0–1.0) | Base confidence multiplier |
 | `common_name` | No | string | CLI shorthand (not used yet) |
 | `hashcat_mode` | No | int | Shown in detection results for crack suggestions |
