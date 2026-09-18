@@ -76,9 +76,15 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Encrypt input using a cipher. Usage: --encrypt <cipher> --key <key>. Ciphers: caesar, vigenere, affine, rail-fence, xor, columnar, atbash"
+        help = "Encrypt input using a cipher. Usage: --encrypt <cipher> --key <key> [--cipher-param <p>]. Ciphers: caesar, atbash, vigenere, beaufort, autokey, gronsfeld, porta, affine, rail-fence, columnar, polybius, tap, adfgx, adfgvx, four-square, two-square, trifid, playfair, bifid, bacon, substitution, xor"
     )]
     pub(crate) encrypt: Option<String>,
+
+    #[arg(
+        long,
+        help = "Decrypt input using a cipher. Same names/keys as --encrypt. Key formats: shift number (caesar), keyword (most), a,b (affine), K1,K2 (four/two-square), 2-char alphabet (bacon), 26-letter alphabet (substitution); --cipher-param sets rails (rail-fence), period (trifid/bifid), column key (adfgx/adfgvx)"
+    )]
+    pub(crate) decrypt: Option<String>,
 
     #[arg(
         long,

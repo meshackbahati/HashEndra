@@ -2,6 +2,7 @@ use super::analyze::{analyze_single_input, detect_path_file_type, preview_string
 use super::analyze::print_path_metadata;
 use super::decode::handle_deep_decrypt;
 use super::scan::run_forensic_scan;
+use super::workshop_ciphers::run_cipher_command;
 use colored::*;
 use hashendra::safe_print;
 use hashendra::safe_println;
@@ -129,7 +130,28 @@ pub(crate) fn run_workshop(initial_input: Option<String>) -> bool {
                     safe_println!("  /url             - Decode current as URL");
                     safe_println!("  /rot <n>         - Apply a Caesar/ROT shift");
                     safe_println!("  /rot13           - Apply ROT13 to current");
+                    safe_println!("  /caesar <shift>  - Caesar decode with shift");
                     safe_println!("  /xor <key>       - XOR current with key (string)");
+                    safe_println!("  /vigenere <key>  - Vigenere decode");
+                    safe_println!("  /beaufort <key>  - Beaufort decode (reciprocal)");
+                    safe_println!("  /autokey <key>   - Autokey decode");
+                    safe_println!("  /gronsfeld <digits> - Gronsfeld decode");
+                    safe_println!("  /porta <key>     - Porta decode (reciprocal)");
+                    safe_println!("  /affine <a> <b>  - Affine decode");
+                    safe_println!("  /atbash          - Atbash decode (reciprocal)");
+                    safe_println!("  /rail <n>        - Rail Fence decode");
+                    safe_println!("  /columnar <key>  - Columnar decode");
+                    safe_println!("  /polybius [key]  - Polybius decode");
+                    safe_println!("  /tap             - Tap code decode");
+                    safe_println!("  /adfgx <sq> <ck> - ADFGX decode");
+                    safe_println!("  /adfgvx <sq> <ck> - ADFGVX decode");
+                    safe_println!("  /foursquare <k1> <k2> - Four-Square decode");
+                    safe_println!("  /twosquare <k1> <k2>  - Two-Square decode");
+                    safe_println!("  /trifid <key> [period] - Trifid decode");
+                    safe_println!("  /playfair <key>  - Playfair decode");
+                    safe_println!("  /bifid <key> [period]  - Bifid decode");
+                    safe_println!("  /bacon [AB]      - Baconian decode");
+                    safe_println!("  /substitution <KEY26>  - Substitution decode");
                     safe_println!("  /deep            - Run deep auto-unwrapper");
                     safe_println!("  /status          - Show current state");
                     safe_println!("  /history         - Show history stack");
@@ -372,6 +394,24 @@ pub(crate) fn run_workshop(initial_input: Option<String>) -> bool {
                         &mut history,
                     );
                 }
+                "/caesar" => {
+                    if parts.len() > 1 {
+                        if let Ok(shift) = parts[1].parse::<u8>() {
+                            // Same as /rot: left-rotate, which decodes a
+                            // Caesar encryption made with this shift.
+                            workshop_set_current(
+                                "Caesar decoded",
+                                apply_rot(&current, shift),
+                                &mut current,
+                                &mut history,
+                            );
+                        } else {
+                            safe_println!("  [FAIL] Usage: /caesar <shift>");
+                        }
+                    } else {
+                        safe_println!("  [FAIL] Usage: /caesar <shift>");
+                    }
+                }
                 "/xor" => {
                     if parts.len() > 1 {
                         let key = parts[1].as_bytes();
@@ -390,6 +430,12 @@ pub(crate) fn run_workshop(initial_input: Option<String>) -> bool {
                 }
                 "/deep" => {
                     handle_deep_decrypt(&current);
+                }
+                "/vigenere" | "/beaufort" | "/autokey" | "/gronsfeld" | "/porta"
+                | "/affine" | "/atbash" | "/rail" | "/columnar" | "/polybius" | "/tap"
+                | "/adfgx" | "/adfgvx" | "/foursquare" | "/twosquare" | "/trifid"
+                | "/playfair" | "/bifid" | "/bacon" | "/substitution" => {
+                    run_cipher_command(parts[0], &parts, &mut current, &mut history);
                 }
                 "/status" => {
                     safe_println!("  Current: {}", current.yellow());

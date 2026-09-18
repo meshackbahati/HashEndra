@@ -101,6 +101,58 @@ fn exercise_crackers(s: &str) {
     let _ = classic_transposition::columnar_decode(s, &[0]);
     let _ = classic_transposition::columnar_auto_crack(s);
     let _ = classic_ciphers::simple_substitution_decode(s, &std::collections::HashMap::new());
+    exercise_cipher_keyed(s);
+}
+
+/// Keyed encrypt/decrypt with hostile keys: empty, non-ASCII, overlong,
+/// invalid numbers. Nothing here may panic; garbage in, garbage out.
+fn exercise_cipher_keyed(s: &str) {
+    use hashendra::core::scanner::codecs;
+    use hashendra::detectors::{classic_playfair, classic_squares, classic_vigenere};
+    let keys = ["", "K", "a b!", "ünïcodé key 123", "KEYKEYKEYKEYKEYKEYKEYKEY"];
+    for key in keys {
+        let _ = codecs::caesar_encrypt(s, 0);
+        let _ = codecs::caesar_encrypt(s, 255);
+        let _ = codecs::vigenere_encrypt(s, key);
+        let _ = codecs::affine_encrypt(s, 2, 8);
+        let _ = codecs::affine_encrypt(s, 5, 8);
+        let _ = classic_ciphers::affine_decrypt(s, 2, 8);
+        let _ = classic_ciphers::affine_decrypt(s, 5, 8);
+        let _ = codecs::rail_fence_encrypt(s, 0);
+        let _ = codecs::rail_fence_encrypt(s, 1);
+        let _ = codecs::rail_fence_encrypt(s, 99999);
+        let _ = codecs::xor_encrypt(s.as_bytes(), &[]);
+        let _ = codecs::xor_encrypt(s.as_bytes(), key.as_bytes());
+        let _ = codecs::columnar_encrypt(s, key);
+        let _ = classic_transposition::columnar_order(key);
+        let _ = classic_vigenere::beaufort_crypt(s, key);
+        let _ = classic_vigenere::autokey_encrypt(s, key);
+        let _ = classic_vigenere::autokey_decrypt(s, key);
+        let _ = classic_vigenere::gronsfeld_encrypt(s, key);
+        let _ = classic_vigenere::gronsfeld_decrypt(s, key);
+        let _ = classic_vigenere::porta_crypt(s, key);
+        let _ = classic_squares::polybius_encrypt(s, key);
+        let _ = classic_squares::polybius_decrypt(s, key);
+        let _ = classic_squares::tap_encode(s);
+        let _ = classic_squares::tap_decode(s);
+        let _ = classic_squares::adfgx_encrypt(s, key, key);
+        let _ = classic_squares::adfgx_decrypt(s, key, key);
+        let _ = classic_squares::adfgvx_encrypt(s, key, key);
+        let _ = classic_squares::adfgvx_decrypt(s, key, key);
+        let _ = classic_squares::four_square_encrypt(s, key, key);
+        let _ = classic_squares::four_square_decrypt(s, key, key);
+        let _ = classic_squares::two_square_encrypt(s, key, key);
+        let _ = classic_squares::two_square_decrypt(s, key, key);
+        let _ = classic_squares::trifid_encrypt(s, key, 5);
+        let _ = classic_squares::trifid_decrypt(s, key, 5);
+        let _ = classic_squares::trifid_encrypt(s, key, 0);
+        let _ = classic_playfair::playfair_encrypt(s, key);
+        let _ = classic_playfair::playfair_decode(s, key);
+        let _ = classic_playfair::bifid_encrypt(s, key, 5);
+        let _ = classic_playfair::bifid_decrypt(s, key, 5);
+        let _ = classic_ciphers::bacon_encode(s, 'A', 'B');
+        let _ = classic_ciphers::simple_substitution_encrypt(s, &std::collections::HashMap::new());
+    }
 }
 
 fn exercise_blob(data: &[u8]) {
@@ -121,6 +173,7 @@ fn hunt_string_inputs() {
         let s = gen_string(&mut rng, 120);
         exercise_decoders(&s);
         exercise_crackers(&s);
+        exercise_cipher_keyed(&s);
         // Non-UTF8-hostile twin: lossy conversion must also survive.
         let lossy = String::from_utf8_lossy(&gen_bytes(&mut rng, 120)).into_owned();
         exercise_decoders(&lossy);

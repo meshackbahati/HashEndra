@@ -8,12 +8,13 @@ pub mod inspect;
 pub mod lookup;
 pub mod scan;
 pub mod workshop;
+pub mod workshop_ciphers;
 
 pub(crate) use analyze::{analyze_file, analyze_single_input};
 pub(crate) use carve::run_carve;
 pub(crate) use compute::{
-    handle_encode, handle_encrypt, handle_hash, print_encoding_formats, print_encryption_ciphers,
-    print_hash_algorithms,
+    handle_decrypt, handle_encode, handle_encrypt, handle_hash, print_encoding_formats,
+    print_encryption_ciphers, print_hash_algorithms,
 };
 pub(crate) use crack::{run_crack, CrackArgs};
 pub(crate) use decode::{handle_decode, handle_deep_decrypt, handle_rot, handle_xor};

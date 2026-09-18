@@ -134,10 +134,15 @@ pub fn caesar_encrypt(input: &str, shift: u8) -> String {
 
 /// Encrypts text using a Vigenere cipher (forward direction).
 pub fn vigenere_encrypt(input: &str, key: &str) -> String {
-    if key.is_empty() {
+    // Filtered like vigenere_decode: "a b" must not underflow the shift math.
+    let key_upper: Vec<u8> = key
+        .to_uppercase()
+        .bytes()
+        .filter(|b| b.is_ascii_alphabetic())
+        .collect();
+    if key_upper.is_empty() {
         return input.to_string();
     }
-    let key_upper: Vec<u8> = key.to_uppercase().bytes().collect();
     let mut key_idx = 0;
     input
         .chars()
@@ -210,8 +215,12 @@ pub fn rail_fence_encrypt(input: &str, rails: usize) -> String {
     fence.into_iter().flatten().collect()
 }
 
-/// Encrypts bytes using XOR with a repeating key.
+/// Encrypts bytes using XOR with a repeating key. An empty key is the
+/// identity (returns the input unchanged) rather than panicking.
 pub fn xor_encrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
+    if key.is_empty() {
+        return data.to_vec();
+    }
     data.iter()
         .enumerate()
         .map(|(i, &b)| b ^ key[i % key.len()])

@@ -100,9 +100,22 @@ pub(crate) fn is_valid_plaintext(s: &str) -> bool {
 /// XOR acceptance rule: printable-ratio alone admits garbage on short
 /// inputs, so the result must also read as English (absolute bar) and
 /// read *more* English than the input (relative bar).
-pub(crate) fn xor_result_beats_input(decoded: &str, input_chi: f32) -> bool {
+pub(crate) fn xor_result_beats_input(input: &str, decoded: &str, input_chi: f32) -> bool {
     let chi = crate::core::cryptanalysis::chi_squared_score(decoded);
-    chi < 150.0 && chi < input_chi
+    if chi >= 150.0 {
+        return false;
+    }
+    if input.chars().filter(|c| c.is_ascii_alphabetic()).count() < 4 {
+        // Nothing to compare against (hex digests, digit strings): demand a
+        // strong plaintext signal — a space or a long marker. Bigram rates
+        // trip on 5-character noise ("eSwwr" scores 0.25), so they don't count.
+        let lower = decoded.to_lowercase();
+        return decoded.contains(' ')
+            || ["the", "and", "hello", "world", "flag", "json", "http"]
+                .iter()
+                .any(|marker| lower.contains(marker));
+    }
+    chi < input_chi
 }
 
 pub(crate) fn should_stop_on_result(s: &str) -> bool {

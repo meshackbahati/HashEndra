@@ -291,6 +291,62 @@ impl RecursiveEngine {
                     });
                 }
             }
+
+            // Tap code: dots, spaces, slashes only. The decoder is exact
+            // (no statistics involved), so the Chi-Squared bar plus a
+            // non-empty result suffices — no plaintext-shape gate, which
+            // would reject short answers like "HI".
+            if input.len() >= 8
+                && input.chars().all(|c| matches!(c, '.' | ' ' | '/'))
+                && input.contains('.')
+            {
+                use crate::detectors::classic_squares::tap_decode;
+                let tap_res = tap_decode(input);
+                if !tap_res.is_empty() && tap_res != input {
+                    let tap_chi = crate::core::cryptanalysis::chi_squared_score(&tap_res);
+                    if tap_chi < input_chi * 0.8 {
+                        let strict = input.split(" / ").all(|letter| {
+                            let mut parts = letter.trim().split(' ');
+                            matches!(
+                                (parts.next(), parts.next(), parts.next()),
+                                (Some(r), Some(c), None)
+                                if (1..=5).contains(&r.len())
+                                    && (1..=5).contains(&c.len())
+                                    && r.chars().all(|c| c == '.')
+                                    && c.chars().all(|c| c == '.')
+                            )
+                        });
+                        candidates.push(DecodeStep {
+                            layer: depth,
+                            decoder: "Tap code".to_string(),
+                            result: tap_res,
+                            confidence: if strict { 0.95 } else { 0.7 },
+                        });
+                    }
+                }
+            }
+
+            // Polybius digit pairs: only 1-5, even length, no separators
+            // (anything else would silently shift alignment on decode).
+            // Exact decoder: Chi-Squared bar only, same reasoning as Tap.
+            if input.len() >= 8
+                && input.len().is_multiple_of(2)
+                && input.chars().all(|c| ('1'..='5').contains(&c))
+            {
+                use crate::detectors::classic_squares::polybius_decrypt;
+                let poly_res = polybius_decrypt(input, "");
+                if !poly_res.is_empty() {
+                    let poly_chi = crate::core::cryptanalysis::chi_squared_score(&poly_res);
+                    if poly_chi < input_chi * 0.8 {
+                        candidates.push(DecodeStep {
+                            layer: depth,
+                            decoder: "Polybius".to_string(),
+                            result: poly_res,
+                            confidence: 0.7,
+                        });
+                    }
+                }
+            }
         }
 
         // --- Expensive statistical crackers (gated) ---
@@ -365,7 +421,7 @@ impl RecursiveEngine {
                     *score > 0.85
                         && is_meaningful_plaintext_candidate(decoded)
                         && decoded != input
-                        && xor_result_beats_input(decoded, input_chi)
+                        && xor_result_beats_input(input, decoded, input_chi)
                 });
             if let Some((_, xor_res, xor_score)) = single_byte {
                 candidates.push(DecodeStep {
@@ -381,7 +437,7 @@ impl RecursiveEngine {
                 && xor_score > 0.8
                     && is_meaningful_plaintext_candidate(&xor_res)
                     && xor_res != input
-                    && xor_result_beats_input(&xor_res, input_chi)
+                    && xor_result_beats_input(input, &xor_res, input_chi)
                 {
                     candidates.push(DecodeStep {
                         layer: depth,
