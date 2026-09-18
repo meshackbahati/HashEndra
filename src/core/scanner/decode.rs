@@ -295,7 +295,8 @@ pub fn decode_quoted_printable(input: &str) -> Option<Vec<u8>> {
             }
 
             if i + 2 < bytes.len() {
-                let pair = &input[i + 1..i + 3];
+                // Slice bytes, not str: multibyte input must fail cleanly here.
+                let pair = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
                 if let Ok(value) = u8::from_str_radix(pair, 16) {
                     decoded.push(value);
                     changed = true;

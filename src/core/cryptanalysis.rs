@@ -82,16 +82,13 @@ pub fn estimate_vigenere_period(text: &str, max_period: usize) -> Vec<(usize, f3
 /// Checks if a string contains common English bigrams.
 pub fn contains_english_patterns(text: &str) -> f32 {
     let common_bigrams = ["th", "he", "in", "er", "an", "re", "ed", "on", "es", "st"];
-    let text = text.to_lowercase();
+    let chars: Vec<char> = text.to_lowercase().chars().collect();
     let mut matches = 0;
     let mut total = 0;
 
-    for i in 0..text.len().saturating_sub(1) {
-        if i + 2 > text.len() {
-            break;
-        }
-        let bigram = &text[i..i + 2];
-        if common_bigrams.contains(&bigram) {
+    for pair in chars.windows(2) {
+        let bigram: String = pair.iter().collect();
+        if common_bigrams.contains(&bigram.as_str()) {
             matches += 1;
         }
         total += 1;
@@ -143,12 +140,13 @@ pub const QUADGRAMS: &[(&str, f32)] = &[
 /// Returns a negative value; higher (closer to zero) is better.
 pub fn quadgram_score(text: &str) -> f32 {
     let text = text.to_uppercase();
+    let chars: Vec<char> = text.chars().collect();
     let mut score = 0.0;
     let mut count = 0;
 
-    for i in 0..text.len().saturating_sub(3) {
-        let quad = &text[i..i + 4];
-        if quad.chars().all(|c| c.is_ascii_alphabetic()) {
+    for quad in chars.windows(4) {
+        if quad.iter().all(|c| c.is_ascii_alphabetic()) {
+            let quad: String = quad.iter().collect();
             if let Some(&(_, log_p)) = QUADGRAMS.iter().find(|(q, _)| *q == quad) {
                 score += log_p;
             } else {
