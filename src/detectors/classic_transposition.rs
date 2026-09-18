@@ -84,6 +84,9 @@ pub fn columnar_order(key: &str) -> Vec<usize> {
 
 /// Decodes a Columnar Transposition cipher with a given key (permutation).
 ///
+/// Inverts `columnar_encrypt`: column heights follow the unpadded grid, so
+/// column c holds every row r with `r * cols + c < len`.
+///
 /// A single-column key is the identity:
 ///
 /// ```
@@ -92,15 +95,24 @@ pub fn columnar_order(key: &str) -> Vec<usize> {
 /// ```
 pub fn columnar_decode(text: &str, key: &[usize]) -> String {
     let cols = key.len();
-    let rows = (text.len() as f32 / cols as f32).ceil() as usize;
-    let mut grid = vec![vec![' '; cols]; rows];
+    let chars: Vec<char> = text.chars().collect();
+    if cols == 0 || chars.is_empty() {
+        return text.to_string();
+    }
+    let len = chars.len();
+    let heights: Vec<usize> = (0..cols)
+        .map(|c| if c < len { (len - 1 - c) / cols + 1 } else { 0 })
+        .collect();
 
     // Fill the grid column by column according to the key
-    let mut chars = text.chars();
+    let rows = heights.iter().copied().max().unwrap_or(0);
+    let mut grid = vec![vec![' '; cols]; rows];
+    let mut pos = 0;
     for &col_idx in key {
-        for row in grid.iter_mut() {
-            if let Some(c) = chars.next() {
+        for row in grid.iter_mut().take(heights[col_idx]) {
+            if let Some(&c) = chars.get(pos) {
                 row[col_idx] = c;
+                pos += 1;
             }
         }
     }

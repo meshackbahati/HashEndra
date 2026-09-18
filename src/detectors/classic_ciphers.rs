@@ -34,8 +34,9 @@ pub fn caesar_auto_crack(text: &str) -> (u8, String, f32) {
     (best_shift, best_text, best_score)
 }
 
-/// Decodes an Atbash cipher (alphabet reversal).
-pub fn atbash_decode(text: &str) -> String {
+/// Atbash transform (alphabet reversal). Self-inverse: encrypt and decrypt
+/// are the same call.
+pub fn atbash_crypt(text: &str) -> String {
     text.chars()
         .map(|c| {
             if c.is_ascii_uppercase() {
@@ -47,6 +48,11 @@ pub fn atbash_decode(text: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Decodes an Atbash cipher (alphabet reversal).
+pub fn atbash_decode(text: &str) -> String {
+    atbash_crypt(text)
 }
 
 /// Automatically cracks an Affine cipher (ax + b mod 26).
@@ -120,6 +126,28 @@ pub fn affine_decrypt(text: &str, a: u8, b: u8) -> Option<String> {
             })
             .collect(),
     )
+}
+
+/// Encodes Baconian cipher: A-Z to 5-bit groups using `char_a`/`char_b`.
+/// Inverse of `bacon_decode`; always produces the 26-letter variant.
+pub fn bacon_encode(text: &str, char_a: char, char_b: char) -> String {
+    text.to_ascii_uppercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphabetic())
+        .map(|c| {
+            let val = c as u8 - b'A';
+            (0..5)
+                .map(|idx| {
+                    if val & (1 << (4 - idx)) != 0 {
+                        char_b
+                    } else {
+                        char_a
+                    }
+                })
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 /// Decodes Baconian cipher (5-bit binary encoded as two types of characters).
@@ -246,6 +274,29 @@ pub fn simple_substitution_decode(
         .collect()
 }
 
+/// Applies a monoalphabetic substitution map in the forward direction
+/// (plain → cipher). This is the inverse of `simple_substitution_decode`:
+/// build the map the other way round. Unmapped letters pass through.
+pub fn simple_substitution_encrypt(
+    text: &str,
+    alphabet_map: &std::collections::HashMap<char, char>,
+) -> String {
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                *alphabet_map.get(&c).unwrap_or(&c)
+            } else if c.is_ascii_lowercase() {
+                alphabet_map
+                    .get(&c.to_ascii_uppercase())
+                    .map(|&rc| rc.to_ascii_lowercase())
+                    .unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 /// Automatically cracks a simple substitution cipher using Hill Climbing.
 pub fn simple_substitution_auto_crack(text: &str) -> (String, String, f32) {
     use crate::core::cryptanalysis::quadgram_score;
@@ -293,101 +344,6 @@ pub fn simple_substitution_auto_crack(text: &str) -> (String, String, f32) {
     )
 }
 
-/// Decodes a Playfair cipher with a given keyword and 5x5 grid (J=I).
-pub fn playfair_decode(text: &str, key: &str) -> String {
-    let mut grid = ['\0'; 25];
-    let mut key_chars = Vec::new();
-    let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ"; // No 'J'
-
-    let key = key.to_uppercase().replace('J', "I");
-    for c in key.chars().chain(alphabet.chars()) {
-        if c.is_ascii_alphabetic() && !key_chars.contains(&c) {
-            key_chars.push(c);
-        }
-    }
-    grid.copy_from_slice(&key_chars[..25]);
-
-    let find_pos = |c: char| {
-        let c = if c == 'J' { 'I' } else { c };
-        grid.iter().position(|&x| x == c).unwrap_or(0)
-    };
-
-    let clean: Vec<char> = text
-        .to_uppercase()
-        .chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .collect();
-    let mut result = String::new();
-
-    for i in (0..clean.len()).step_by(2) {
-        if i + 1 >= clean.len() {
-            break;
-        }
-        let p1 = find_pos(clean[i]);
-        let p2 = find_pos(clean[i + 1]);
-
-        let (r1, c1) = (p1 / 5, p1 % 5);
-        let (r2, c2) = (p2 / 5, p2 % 5);
-
-        if r1 == r2 {
-            result.push(grid[r1 * 5 + (c1 + 4) % 5]);
-            result.push(grid[r2 * 5 + (c2 + 4) % 5]);
-        } else if c1 == c2 {
-            result.push(grid[((r1 + 4) % 5) * 5 + c1]);
-            result.push(grid[((r2 + 4) % 5) * 5 + c2]);
-        } else {
-            result.push(grid[r1 * 5 + c2]);
-            result.push(grid[r2 * 5 + c1]);
-        }
-    }
-    result
-}
-
-/// Decodes a Bifid cipher (period 5 by default).
-pub fn bifid_decode(text: &str, key: &str, period: usize) -> String {
-    let mut grid = ['\0'; 25];
-    let mut key_chars = Vec::new();
-    let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ"; // No 'J'
-
-    let key = key.to_uppercase().replace('J', "I");
-    for c in key.chars().chain(alphabet.chars()) {
-        if c.is_ascii_alphabetic() && !key_chars.contains(&c) {
-            key_chars.push(c);
-        }
-    }
-    grid.copy_from_slice(&key_chars[..25]);
-
-    let find_pos = |c: char| {
-        let c = if c == 'J' { 'I' } else { c };
-        let p = grid.iter().position(|&x| x == c).unwrap_or(0);
-        (p / 5, p % 5)
-    };
-
-    let clean: Vec<char> = text
-        .to_uppercase()
-        .chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .collect();
-    let mut coords = Vec::new();
-    for i in (0..clean.len()).step_by(period) {
-        let chunk_size = std::cmp::min(period, clean.len() - i);
-        let mut rows = Vec::new();
-        let mut cols = Vec::new();
-        for j in 0..chunk_size {
-            let (r, c) = find_pos(clean[i + j]);
-            rows.push(r);
-            cols.push(c);
-        }
-        coords.extend(rows);
-        coords.extend(cols);
-    }
-
-    let mut result = String::new();
-    for i in (0..coords.len()).step_by(2) {
-        result.push(grid[coords[i] * 5 + coords[i + 1]]);
-    }
-    result
-}
 
 static SEED: AtomicU32 = AtomicU32::new(12345);
 
@@ -429,5 +385,23 @@ mod tests {
         let first = simple_substitution_auto_crack(text);
         let second = simple_substitution_auto_crack(text);
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn bacon_roundtrip() {
+        assert_eq!(bacon_encode("AB", 'A', 'B'), "AAAAAAAAAB");
+        assert_eq!(bacon_decode("AAAAAAAAAB", 'A', 'B').as_deref(), Some("AB"));
+    }
+
+    #[test]
+    fn substitution_roundtrip() {
+        use std::collections::HashMap;
+        let enc_map: HashMap<char, char> =
+            [('H', 'Q'), ('I', 'X')].into_iter().collect();
+        let dec_map: HashMap<char, char> =
+            [('Q', 'H'), ('X', 'I')].into_iter().collect();
+        let cipher = simple_substitution_encrypt("HI there", &enc_map);
+        assert_eq!(cipher, "QX tqere");
+        assert_eq!(simple_substitution_decode(&cipher, &dec_map), "HI there");
     }
 }

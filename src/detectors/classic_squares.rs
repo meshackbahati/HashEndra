@@ -7,16 +7,18 @@
 //! common implementations but state it when exchanging with other tools.
 
 /// Build a keyed square: keyword letters first (deduped), then the rest of
-/// `alphabet` in order. `merge_from` maps onto `merge_to` (e.g. J→I).
+/// `alphabet` in order. Only alphabet members enter the square (anything
+/// else, including digits in a 5x5 key, is skipped); `merge_from` maps onto
+/// `merge_to` first (e.g. J→I).
 pub fn keyed_square(key: &str, alphabet: &str, merge_from: char, merge_to: char) -> Vec<char> {
     let mut square = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for mut c in key.to_ascii_uppercase().chars().chain(alphabet.chars()) {
-        if !c.is_ascii_alphabetic() && !c.is_ascii_digit() {
-            continue;
-        }
         if c == merge_from {
             c = merge_to;
+        }
+        if !alphabet.contains(c) {
+            continue;
         }
         if seen.insert(c) {
             square.push(c);
@@ -254,7 +256,7 @@ fn columnar_unread(text: &[char], col_key: &str) -> Vec<char> {
 
 /// Four-Square encrypt (digraphs; non-letters dropped, odd length padded with X).
 pub fn four_square_encrypt(text: &str, key1: &str, key2: &str) -> String {
-    let plain: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let plain: Vec<char> = "ABCDEFGHIKLMNOPQRSTUVWXYZ".chars().collect();
     let top_right = keyed_square(key1, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     let bottom_left = keyed_square(key2, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     digraph_map(text, |a, b| {
@@ -266,7 +268,7 @@ pub fn four_square_encrypt(text: &str, key1: &str, key2: &str) -> String {
 
 /// Four-Square decrypt.
 pub fn four_square_decrypt(text: &str, key1: &str, key2: &str) -> String {
-    let plain: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let plain: Vec<char> = "ABCDEFGHIKLMNOPQRSTUVWXYZ".chars().collect();
     let top_right = keyed_square(key1, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     let bottom_left = keyed_square(key2, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     digraph_map(text, |a, b| {
@@ -279,7 +281,7 @@ pub fn four_square_decrypt(text: &str, key1: &str, key2: &str) -> String {
 /// Two-Square encrypt, horizontal variant: plaintext digraphs read from the
 /// two plain top squares, ciphertext from the keyed bottom squares.
 pub fn two_square_encrypt(text: &str, key1: &str, key2: &str) -> String {
-    let plain: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let plain: Vec<char> = "ABCDEFGHIKLMNOPQRSTUVWXYZ".chars().collect();
     let bottom_left = keyed_square(key1, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     let bottom_right = keyed_square(key2, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     digraph_map(text, |a, b| {
@@ -294,7 +296,7 @@ pub fn two_square_encrypt(text: &str, key1: &str, key2: &str) -> String {
 
 /// Two-Square decrypt (horizontal variant).
 pub fn two_square_decrypt(text: &str, key1: &str, key2: &str) -> String {
-    let plain: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
+    let plain: Vec<char> = "ABCDEFGHIKLMNOPQRSTUVWXYZ".chars().collect();
     let bottom_left = keyed_square(key1, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     let bottom_right = keyed_square(key2, "ABCDEFGHIKLMNOPQRSTUVWXYZ", 'J', 'I');
     digraph_map(text, |a, b| {

@@ -1,5 +1,6 @@
 pub mod ciphers;
 pub mod classic_ciphers;
+pub mod classic_playfair;
 pub mod classic_squares;
 pub mod classic_transposition;
 pub mod classic_vigenere;
