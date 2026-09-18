@@ -277,6 +277,7 @@ Workshop commands (full list via `/help` inside):
 | `/context <ctx>` | Set analysis context |
 | `/analyze` | Run detection on current text |
 | `/base64`, `/hex`, `/base32`, `/base58` | Decode one layer |
+| `/from <format>` | Decode as one explicit format (base32hex, base91, z85, …) |
 | `/binary`, `/octal`, `/ascii85`, `/qp` | Decode one layer |
 | `/html`, `/morse`, `/url` | Decode one layer |
 | `/rot <n>`, `/rot13`, `/caesar <shift>` | Caesar shifts |

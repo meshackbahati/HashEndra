@@ -59,8 +59,7 @@ pub(crate) fn handle_deep_decrypt(input: &str) -> bool {
     }
 }
 
-pub(crate) fn handle_decode(input: &str, _context_str: &str) -> bool {
-    // Delegate to RecursiveEngine for consistency with --deep-decrypt
+pub(crate) fn handle_decode(input: &str, _context_str: &str) -> bool {    // Delegate to RecursiveEngine for consistency with --deep-decrypt
     let engine = RecursiveEngine::new(10);
     let result = engine.explore_paths(input);
 
@@ -91,6 +90,73 @@ pub(crate) fn handle_decode(input: &str, _context_str: &str) -> bool {
         safe_println!("[FAIL] No automatic decoding layers found.");
         false
     }
+}
+
+/// Decode input as one explicit format (`--from`). No guessing: strict
+/// decoders only. Prints text when the bytes are UTF-8, hex otherwise.
+pub(crate) fn handle_decode_format(input: &str, format: &str) -> bool {
+    use hashendra::core::basecodecs;
+    use hashendra::core::scanner::{decode as d, decode_binary, decode_octal};
+    use hashendra::core::scanner::codecs::{decode_base32, decode_base58};
+
+    let result: Option<Vec<u8>> = match format.to_ascii_lowercase().as_str() {
+        "hex" => d::decode_hex(input),
+        "base64" => d::decode_base64(input),
+        "base64url" => d::decode_base64_url(input),
+        "base32" => decode_base32(input),
+        "base32hex" => basecodecs::decode_base32hex(input),
+        "base58" => decode_base58(input),
+        "base62" => basecodecs::decode_base62(input),
+        "base91" => basecodecs::decode_base91(input),
+        "ascii85" | "a85" => d::decode_ascii85(input),
+        "url" => d::decode_url(input).map(|s| s.into_bytes()),
+        "html" => d::decode_html_entities(input).map(|s| s.into_bytes()),
+        "qp" | "quoted-printable" => d::decode_quoted_printable(input),
+        "binary" => decode_binary(input),
+        "octal" => decode_octal(input),
+        "morse" => d::decode_morse(input).map(|s| s.into_bytes()),
+        "crockford" => basecodecs::decode_crockford(input),
+        "uuencode" | "uu" => basecodecs::decode_uu(input),
+        "xxencode" | "xx" => basecodecs::decode_xx(input),
+        "z85" => basecodecs::decode_z85(input),
+        "base58check" => match basecodecs::decode_base58check(input) {
+            Some((version, payload)) => {
+                safe_println!("[OK] base58check version {}: {}", version, hex_of(&payload));
+                return true;
+            }
+            None => None,
+        },
+        _ => {
+            safe_println!(
+                "{} Unknown format '{}'. Use --list-encodings to see supported formats.",
+                "[ERROR]".red().bold(),
+                format
+            );
+            return false;
+        }
+    };
+
+    match result {
+        Some(bytes) if !bytes.is_empty() => {
+            match String::from_utf8(bytes) {
+                Ok(text) => safe_println!("[OK] {}: {}", format, text.green()),
+                Err(e) => safe_println!(
+                    "[OK] {} (non-UTF8, hex): {}",
+                    format,
+                    hex_of(e.as_bytes())
+                ),
+            }
+            true
+        }
+        _ => {
+            safe_println!("[FAIL] Input is not valid {}.", format);
+            false
+        }
+    }
+}
+
+fn hex_of(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 pub(crate) fn handle_rot(input: &str) -> bool {

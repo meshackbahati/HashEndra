@@ -22,6 +22,7 @@ src/
 │   ├── scanner/         # mod (entropy/charset) + score, decode, codecs
 │   ├── patterns.rs      # Signature scanning, lazy_static compilation
 │   ├── encoder.rs       # 13 encoding functions
+│   ├── basecodecs.rs    # base32hex/58check/62/91, Z85, Crockford, UU, XX
 │   ├── hasher.rs        # 6 hash algorithms
 │   ├── entropy.rs       # Rolling entropy, boundary detection
 │   ├── cryptanalysis.rs # Chi-squared, frequency analysis

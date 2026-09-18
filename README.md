@@ -263,9 +263,13 @@ hashendra --decode "48656c6c6f20576f726c64"  # Hex    -> Hello World
 hashendra --decode "Hello%20World%21"        # URL    -> Hello World!
 ```
 
-Handled: Base64, Hex (raw/spaced/`0x`/`\x`), URL, Base32, Base58
-(Bitcoin/Flickr), Binary, Octal, Ascii85 (with or without `~>`),
+Handled: Base64 (+MIME whitespace), Hex (raw/spaced/`0x`/`\x`), URL, Base32, Base58
+(Bitcoin), Binary, Octal, Ascii85 (with or without `~>`),
 Quoted-Printable, HTML entities, Morse.
+
+Explicit formats via `--from` (no guessing): base32hex, base58check,
+base62, base91, crockford, uuencode, xxencode, z85 — same names work
+with `--to` for encoding. Example: `hashendra --from base91 "<text>"`.
 
 ### 6. Recursive unwrapping
 
@@ -439,7 +443,8 @@ up to 10 layers, stopping on cycles or plaintext-looking output.
   BLAKE2/3, Snefru, HAVAL, GOST, SM3, Streebog
 - **Password KDFs**: BCrypt, Argon2, Scrypt, PBKDF2, Unix crypt, Django,
   Cisco, MSSQL, MySQL, Oracle, WordPress, Drupal, Joomla
-- **Encodings**: Base64/32/58/85, Hex, URL, Punycode, UUencode, ROT13/47,
+- **Encodings**: Base64/32/58/85 (+32hex, 58check, 62, 91, Z85, Crockford,
+  UU, XX), Hex, URL, Punycode, UUencode, ROT13/47,
   EBCDIC, Morse, Binary, Octal
 - **Blockchain**: Bitcoin (P2PKH, P2SH, Bech32), Ethereum, Litecoin (Base58 + Bech32),
   Monero, Ripple, Solana, IPFS CIDs, WIF keys

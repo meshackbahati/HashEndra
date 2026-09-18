@@ -245,8 +245,9 @@ pub fn encode_ascii85(data: &[u8]) -> String {
 }
 
 pub const ENCODING_FORMATS: &[&str] = &[
-    "base64", "base64url", "base32", "base58", "hex", "hexupper",
-    "url", "html", "qp", "binary", "octal", "morse", "ascii85",
+    "base64", "base64url", "base32", "base32hex", "base58", "base58check", "base62",
+    "base91", "hex", "hexupper", "url", "html", "qp", "binary", "octal", "morse",
+    "ascii85", "crockford", "uuencode", "xxencode", "z85",
 ];
 
 /// Encodes input to the specified format. Returns Ok(String) on success.
@@ -256,7 +257,11 @@ pub fn encode_to_format(input: &str, format: &str) -> Result<String, String> {
         "base64" => Ok(encode_base64(data)),
         "base64url" => Ok(encode_base64url(data)),
         "base32" => Ok(encode_base32(data)),
+        "base32hex" => Ok(crate::core::basecodecs::encode_base32hex(data)),
         "base58" => Ok(encode_base58(data)),
+        "base58check" => Ok(crate::core::basecodecs::encode_base58check(0, data)),
+        "base62" => Ok(crate::core::basecodecs::encode_base62(data)),
+        "base91" => Ok(crate::core::basecodecs::encode_base91(data)),
         "hex" => Ok(encode_hex(data)),
         "hexupper" | "hex-upper" => Ok(encode_hex_upper(data)),
         "url" => Ok(encode_url(input)),
@@ -266,6 +271,11 @@ pub fn encode_to_format(input: &str, format: &str) -> Result<String, String> {
         "octal" => Ok(encode_octal(data)),
         "morse" => Ok(encode_morse(input)),
         "ascii85" | "a85" => Ok(encode_ascii85(data)),
+        "crockford" => Ok(crate::core::basecodecs::encode_crockford(data)),
+        "uuencode" | "uu" => Ok(crate::core::basecodecs::encode_uu(data)),
+        "xxencode" | "xx" => Ok(crate::core::basecodecs::encode_xx(data)),
+        "z85" => crate::core::basecodecs::encode_z85(data)
+            .ok_or_else(|| "z85 needs input length divisible by 4".to_string()),
         _ => Err(format!(
             "Unknown encoding format '{}'. Use --list-encodings to see supported formats.",
             format

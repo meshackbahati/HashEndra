@@ -7,7 +7,8 @@ pub fn decode_base64_url(input: &str) -> Option<Vec<u8>> {
 }
 
 fn decode_base64_generic(input: &str, url_safe: bool) -> Option<Vec<u8>> {
-    let mut normalized = input.trim().to_string();
+    // MIME (RFC 2045) ignores whitespace inside the payload; strip it all.
+    let mut normalized: String = input.chars().filter(|c| !c.is_ascii_whitespace()).collect();
     if normalized.is_empty() {
         return None;
     }

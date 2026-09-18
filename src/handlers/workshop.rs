@@ -153,6 +153,7 @@ pub(crate) fn run_workshop(initial_input: Option<String>) -> bool {
                     safe_println!("  /bacon [AB]      - Baconian decode");
                     safe_println!("  /substitution <KEY26>  - Substitution decode");
                     safe_println!("  /deep            - Run deep auto-unwrapper");
+                    safe_println!("  /from <format>  - Decode current as one explicit format");
                     safe_println!("  /status          - Show current state");
                     safe_println!("  /history         - Show history stack");
                     safe_println!("  /undo            - Revert to previous state");
@@ -430,6 +431,14 @@ pub(crate) fn run_workshop(initial_input: Option<String>) -> bool {
                 }
                 "/deep" => {
                     handle_deep_decrypt(&current);
+                }
+                "/from" => {
+                    if parts.len() > 1 {
+                        use super::decode::handle_decode_format;
+                        handle_decode_format(&current, parts[1]);
+                    } else {
+                        safe_println!("  [FAIL] Usage: /from <format> (see --list-encodings)");
+                    }
                 }
                 "/vigenere" | "/beaufort" | "/autokey" | "/gronsfeld" | "/porta"
                 | "/affine" | "/atbash" | "/rail" | "/columnar" | "/polybius" | "/tap"

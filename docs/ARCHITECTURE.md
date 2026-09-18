@@ -10,7 +10,7 @@ graph TB
         PATTERNS[patterns.rs<br/>Signature scanning,<br/>confidence scoring]
         RECURSIVE[recursive_engine.rs<br/>+ engine_rules.rs<br/>Multi-layer unwrap]
         CRYPTANALYSIS[cryptanalysis.rs<br/>Chi-squared, freq analysis]
-        ENCODER[encoder.rs<br/>Base64/32/58/85, hex,<br/>URL, HTML, binary, morse]
+        ENCODER[encoder.rs<br/>+ basecodecs.rs<br/>Base64/32/58/85/91,<br/>hex, URL, HTML, morse]
         HASHER[hasher.rs<br/>MD5, SHA1/2/3, BLAKE3]
         ENTROPY[entropy.rs<br/>Rolling entropy,<br/>boundary detection]
     end

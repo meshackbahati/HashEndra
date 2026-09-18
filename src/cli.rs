@@ -82,6 +82,12 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
+        help = "Decode input as one explicit format (no guessing): base64, hex, base32hex, base58check, base62, base91, crockford, uuencode, xxencode, z85, ..."
+    )]
+    pub(crate) from: Option<String>,
+
+    #[arg(
+        long,
         help = "Decrypt input using a cipher. Same names/keys as --encrypt. Key formats: shift number (caesar), keyword (most), a,b (affine), K1,K2 (four/two-square), 2-char alphabet (bacon), 26-letter alphabet (substitution); --cipher-param sets rails (rail-fence), period (trifid/bifid), column key (adfgx/adfgvx)"
     )]
     pub(crate) decrypt: Option<String>,

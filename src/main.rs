@@ -5,10 +5,11 @@ use clap::Parser;
 use cli::{CarveOptions, Cli, Commands, DiskOptions, ForensicCommands};
 use colored::*;
 use handlers::{
-    analyze_file, analyze_single_input, handle_decode, handle_decrypt, handle_deep_decrypt,
-    handle_encode, handle_encrypt, handle_hash, handle_rot, handle_xor, print_banner,
-    print_encoding_formats, print_encryption_ciphers, print_hash_algorithms, run_carve, run_crack,
-    run_evm_lookup, run_forensic_disk, run_forensic_scan, run_tls_lookup, run_workshop, CrackArgs,
+    analyze_file, analyze_single_input, handle_decode, handle_decode_format, handle_decrypt,
+    handle_deep_decrypt, handle_encode, handle_encrypt, handle_hash, handle_rot, handle_xor,
+    print_banner, print_encoding_formats, print_encryption_ciphers, print_hash_algorithms,
+    run_carve, run_crack, run_evm_lookup, run_forensic_disk, run_forensic_scan, run_tls_lookup,
+    run_workshop, CrackArgs,
 };
 use hashendra::core::patterns::EXTERNAL_SIGNATURE_COUNT;
 use hashendra::safe_println;
@@ -65,6 +66,8 @@ fn main() -> std::process::ExitCode {
             ok &= handle_encode(input, format);
         } else if cli.deep_decrypt {
             ok &= handle_deep_decrypt(input);
+        } else if let Some(ref format) = cli.from {
+            ok &= handle_decode_format(input, format);
         } else if cli.decode {
             ok &= handle_decode(input, &context);
         } else if cli.rot {
