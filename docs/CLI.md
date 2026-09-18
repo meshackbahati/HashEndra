@@ -146,7 +146,8 @@ hashendra evm a9059cbb
 | `--to <FORMAT>` | Encode input to format | `hashendra --to base64 hello` |
 | `--list-encodings` | List all encoding formats | `hashendra --list-encodings` |
 | `--encrypt <CIPHER>` | Encrypt with cipher | `hashendra --encrypt caesar --key 13 hello` |
-| `--key <KEY>` | Key for encryption | See examples below |
+| `--decrypt <CIPHER>` | Decrypt with cipher (same names/keys) | `hashendra --decrypt vigenere --key secret LXFOPV...` |
+| `--key <KEY>` | Key for ciphers | See examples below, full table in CIPHERS.md |
 | `--list-ciphers` | List all encryption ciphers | `hashendra --list-ciphers` |
 | `-h, --help` | Print help | |
 | `-V, --version` | Print version | |
@@ -201,6 +202,10 @@ hashendra --encrypt vigenere --key "secret" "attack at dawn"
 hashendra --encrypt affine --key "5,8" "hello"
 hashendra --encrypt rail-fence --key 3 --cipher-param 3 "hello world"
 hashendra --encrypt xor --key "key" "secret message"
+
+# Decrypt with ciphers (same key formats; full table in CIPHERS.md)
+hashendra --decrypt vigenere --key "secret" "LXFOPV..."
+hashendra --decrypt adfgx --key "SQUARE,COLUMN" "DFAXFA..."
 ```
 
 ### Cipher Cracking
@@ -274,7 +279,15 @@ Workshop commands (full list via `/help` inside):
 | `/base64`, `/hex`, `/base32`, `/base58` | Decode one layer |
 | `/binary`, `/octal`, `/ascii85`, `/qp` | Decode one layer |
 | `/html`, `/morse`, `/url` | Decode one layer |
-| `/rot <n>`, `/rot13` | Apply Caesar shift |
+| `/rot <n>`, `/rot13`, `/caesar <shift>` | Caesar shifts |
+| `/vigenere`, `/beaufort`, `/autokey`, `/gronsfeld`, `/porta <key>` | Vigenère-family decode |
+| `/affine <a> <b>`, `/atbash` | Affine / Atbash decode |
+| `/rail <n>`, `/columnar <key>` | Transposition decode |
+| `/polybius [key]`, `/tap` | Square / dots decode |
+| `/adfgx`, `/adfgvx <sq> <ck>` | Fractionating decode |
+| `/foursquare`, `/twosquare <k1> <k2>` | Digraph decode |
+| `/trifid`, `/bifid <key> [period]` | Fractionating decode |
+| `/playfair <key>`, `/bacon [AB]`, `/substitution <KEY26>` | Grid / code decode |
 | `/xor <key>` | XOR with a string key |
 | `/deep` | Run the auto-unwrapper |
 | `/status`, `/history`, `/undo` | State management |

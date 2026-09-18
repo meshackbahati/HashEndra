@@ -335,8 +335,9 @@ hashendra workshop "SGVsbG8gV29ybGQ="
 ```
 
 Commands include `/set`, `/load`, `/base64`, `/hex`, `/rot13`, `/xor`,
-`/deep`, `/analyze`, `/status`, `/undo`, `/history`, `/exit` — `/help`
-inside lists them all. Loading a binary file shows a hex preview first.
+`/vigenere`, `/beaufort`, `/playfair`, `/tap`, `/deep`, `/analyze`,
+`/status`, `/undo`, `/history`, `/exit` — `/help` inside lists them all
+(20 cipher commands total). Loading a binary file shows a hex preview first.
 
 ### 12. Batch and JSON
 
@@ -384,20 +385,30 @@ hashendra evm 0xa9059cbb0000...   # pasted calldata works, first 4 bytes used
 
 ## Classical Cipher Suite
 
-| Cipher | Method |
-|--------|--------|
-| Caesar / ROT | All 26 shifts, Chi-Squared ranking |
-| Atbash | Alphabet reversal |
-| Affine | All 312 valid (a, b) pairs |
-| Baconian | A/B decoding, 24- and 26-letter variants |
-| Vigenere | IoC period guess + per-column Caesar |
-| Rail Fence | Rails 2–10, Chi-Squared ranking |
-| Columnar Transposition | Permutation search, small column counts |
-| Simple Substitution | Hill climbing, quadgram scoring |
-| Playfair | 5×5 grid, needs the keyword |
-| Bifid | Polybius square, needs the period |
+Every cipher supports `--encrypt` and `--decrypt` — see [Cipher Usage](docs/CIPHERS.md)
+for key formats and verified examples.
 
-Playfair and Bifid decode with a key you supply; the rest attempt cracks.
+| Cipher | Auto-crack | Needs key |
+|--------|-----------|-----------|
+| Caesar / ROT | all 26 shifts, Chi-Squared | shift number |
+| Atbash | reversal check | — |
+| Affine | all 312 (a, b) pairs | `a,b` |
+| Baconian | A/B shapes | 2-char alphabet |
+| Vigenere | IoC period + column Caesar | keyword |
+| Beaufort | — | keyword (reciprocal) |
+| Autokey | — | keyword |
+| Gronsfeld | — | digits |
+| Porta | — | keyword (reciprocal) |
+| Rail Fence | rails 2–10 | rails number |
+| Columnar | small column counts | keyword |
+| Polybius | digit pairs | square keyword |
+| Tap code | dot patterns | — |
+| ADFGX / ADFGVX | — | square + column keywords |
+| Four-Square / Two-Square | — | two keywords |
+| Trifid | — | square keyword + period |
+| Simple Substitution | hill climbing, quadgrams | 26-letter alphabet |
+| Playfair | — | keyword |
+| Bifid | — | keyword + period |
 
 ---
 
