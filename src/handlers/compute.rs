@@ -2,6 +2,96 @@ use colored::*;
 use hashendra::core::encoder::{encode_to_format, ENCODING_FORMATS};
 use hashendra::core::hasher::{compute_hash, hash_to_hex, HashAlgorithm, HASH_ALGORITHMS};
 use hashendra::safe_println;
+use num_bigint::BigUint;
+
+/// Parse a hex argument, tolerating an optional 0x prefix and whitespace.
+pub(crate) fn hex_arg(s: &str, what: &str) -> Option<Vec<u8>> {
+    let s = s.trim();
+    let s = s
+        .strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .unwrap_or(s);
+    let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if clean.is_empty() || !clean.len().is_multiple_of(2) || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
+        safe_println!(
+            "{} {} must be even-length hex.",
+            "[ERROR]".red().bold(),
+            what
+        );
+        return None;
+    }
+    (0..clean.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&clean[i..i + 2], 16).ok())
+        .collect()
+}
+
+pub(crate) fn hex_key(key: &Option<String>) -> Option<Vec<u8>> {
+    match key {
+        Some(k) => hex_arg(k, "Key"),
+        None => {
+            safe_println!("{} This cipher needs --key <hex>.", "[ERROR]".red().bold());
+            None
+        }
+    }
+}
+
+pub(crate) fn hex_key_iv(key: &Option<String>, param: &Option<String>) -> Option<(Vec<u8>, Vec<u8>)> {    let k = hex_key(key)?;
+    let iv = match param {
+        Some(p) => hex_arg(p, "IV")?,
+        None => {
+            safe_println!("{} CBC needs --cipher-param <iv-hex>.", "[ERROR]".red().bold());
+            return None;
+        }
+    };
+    Some((k, iv))
+}
+
+pub(crate) fn hex_rsa_pair(key: &Option<String>, shape: &str) -> Option<(BigUint, BigUint)> {
+    let raw = key.as_deref().unwrap_or("");
+    let mut parts = raw.splitn(2, ',');
+    let (a, b) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+    let parse = |s: &str| {
+        let clean: String = s
+            .trim()
+            .strip_prefix("0x")
+            .unwrap_or(s.trim())
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        BigUint::parse_bytes(clean.as_bytes(), 16)
+    };
+    match (parse(a), parse(b)) {
+        (Some(x), Some(y)) => Some((x, y)),
+        _ => {
+            safe_println!(
+                "{} RSA key must look like --key \"<hex>,<hex>\" ({}).",
+                "[ERROR]".red().bold(),
+                shape
+            );
+            None
+        }
+    }
+}
+
+/// Show bytes as text when UTF-8, hex otherwise.
+pub(crate) fn show_bytes(bytes: &[u8]) -> String {
+    match String::from_utf8(bytes.to_vec()) {
+        Ok(text) => text,
+        Err(_) => format!(
+            "(non-UTF8, hex) {}",
+            hex_of(bytes)
+        ),
+    }
+}
+
+pub(crate) fn hex_of(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+pub(crate) fn hex_bytes(input: &str, what: &str) -> Option<Vec<u8>> {
+    hex_arg(input, what)
+}
 
 // ──────────────────────────────────────────
 // New operation handlers: hash, encode, encrypt
@@ -21,7 +111,32 @@ pub(crate) fn print_encoding_formats() {
     }
 }
 
-pub(crate) fn handle_hash(input: &str, algorithm: Option<&str>) -> bool {
+pub(crate) fn handle_hash(input: &str, algorithm: Option<&str>, key: &Option<String>) -> bool {
+    // HMAC needs a key; everything else goes through the algorithm table.
+    if let Some(name) = algorithm {
+        let lower = name.to_ascii_lowercase();
+        if lower == "hmac-sha256" || lower == "hmac-sha512" {
+            let Some(k) = key.as_deref() else {
+                safe_println!(
+                    "{} HMAC needs --key <key>.",
+                    "[ERROR]".red().bold()
+                );
+                return false;
+            };
+            let mac = if lower == "hmac-sha256" {
+                hashendra::core::symmetric::hmac_sha256(k.as_bytes(), input.as_bytes())
+            } else {
+                hashendra::core::symmetric::hmac_sha512(k.as_bytes(), input.as_bytes())
+            };
+            safe_println!("{}", "\n── Hash Results ──".green().bold());
+            safe_println!(
+                "  {:<10} {}",
+                format!("{}:", name).cyan(),
+                mac.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            );
+            return true;
+        }
+    }
     let algos: Vec<HashAlgorithm> = if let Some(name) = algorithm {
         match HashAlgorithm::from_name(name) {
             Some(a) => vec![a],
@@ -80,26 +195,13 @@ pub(crate) fn handle_encode(input: &str, format: &str) -> bool {
     }
 }
 
-pub(crate) fn print_encryption_ciphers() {
-    safe_println!("{}", "Supported ciphers (encrypt + decrypt):".blue().bold());
-    for cipher in &[
-        "caesar", "atbash", "affine", "vigenere", "beaufort", "autokey", "gronsfeld", "porta",
-        "rail-fence", "columnar", "polybius", "tap", "adfgx", "adfgvx",
-        "four-square", "two-square", "trifid", "playfair", "bifid",
-        "bacon", "substitution", "xor",
-    ] {
-        safe_println!("  - {}", cipher);
-    }
-    safe_println!("Key formats: --key SHIFT | keyword | a,b | K1,K2 | 2-char alphabet; --cipher-param for rails/period/column key.");
-}
-
 /// String key with a default.
-fn str_key(key: &Option<String>, default: &str) -> String {
+pub(crate) fn str_key(key: &Option<String>, default: &str) -> String {
     key.clone().unwrap_or_else(|| default.to_string())
 }
 
 /// Split "K1,K2" keys (four-square, two-square).
-fn split_key(key: &Option<String>) -> (String, String) {
+pub(crate) fn split_key(key: &Option<String>) -> (String, String) {
     let raw = key.as_deref().unwrap_or(",");
     let mut parts = raw.splitn(2, ',');
     (
@@ -108,160 +210,8 @@ fn split_key(key: &Option<String>) -> (String, String) {
     )
 }
 
-pub(crate) fn handle_encrypt(
-    input: &str,
-    cipher: &str,
-    key: &Option<String>,
-    param: &Option<String>,
-) -> bool {
-    use hashendra::core::scanner::*;
-    use hashendra::detectors::classic_ciphers::*;
-    use hashendra::detectors::classic_playfair::*;
-    use hashendra::detectors::classic_squares::*;
-    use hashendra::detectors::classic_vigenere::*;
-
-    safe_println!("{}", "\n── Encrypted Output ──".green().bold());
-    let result = match cipher {
-        "caesar" | "rot" => {
-            let shift = key.as_deref().and_then(|k| k.parse::<u8>().ok()).unwrap_or(3);
-            Some(caesar_encrypt(input, shift))
-        }
-        "atbash" => Some(atbash_crypt(input)),
-        "vigenere" => {
-            let k = str_key(key, "key");
-            Some(vigenere_encrypt(input, &k))
-        }
-        "beaufort" => {
-            let k = str_key(key, "key");
-            Some(beaufort_crypt(input, &k))
-        }
-        "autokey" => {
-            let k = str_key(key, "key");
-            Some(autokey_encrypt(input, &k))
-        }
-        "gronsfeld" => {
-            let k = str_key(key, "2015");
-            Some(gronsfeld_encrypt(input, &k))
-        }
-        "porta" => {
-            let k = str_key(key, "key");
-            Some(porta_crypt(input, &k))
-        }
-        "affine" => {
-            let parts: Vec<&str> = key.as_deref().unwrap_or("5,8").split(',').collect();
-            let a = parts.first().and_then(|s| s.parse::<u8>().ok()).unwrap_or(5);
-            let b = parts.get(1).and_then(|s| s.parse::<u8>().ok()).unwrap_or(8);
-            affine_encrypt(input, a, b)
-        }
-        "rail-fence" | "railfence" => {
-            let rails = param
-                .as_deref()
-                .or(key.as_deref())
-                .and_then(|k| k.parse::<usize>().ok())
-                .unwrap_or(3);
-            Some(rail_fence_encrypt(input, rails))
-        }
-        "columnar" => {
-            let k = str_key(key, "key");
-            Some(columnar_encrypt(input, &k))
-        }
-        "polybius" => {
-            let k = key.clone().unwrap_or_default();
-            Some(polybius_encrypt(input, &k))
-        }
-        "tap" => Some(tap_encode(input)),
-        "adfgx" => {
-            let (sq, col) = split_key_or_param(key, param, "KEY");
-            Some(adfgx_encrypt(input, &sq, &col))
-        }
-        "adfgvx" => {
-            let (sq, col) = split_key_or_param(key, param, "KEY");
-            Some(adfgvx_encrypt(input, &sq, &col))
-        }
-        "four-square" | "foursquare" => {
-            let (k1, k2) = split_key(key);
-            Some(four_square_encrypt(input, &k1, &k2))
-        }
-        "two-square" | "twosquare" => {
-            let (k1, k2) = split_key(key);
-            Some(two_square_encrypt(input, &k1, &k2))
-        }
-        "trifid" => {
-            let k = str_key(key, "key");
-            let period = param
-                .as_deref()
-                .and_then(|p| p.parse::<usize>().ok())
-                .unwrap_or(5);
-            Some(trifid_encrypt(input, &k, period))
-        }
-        "playfair" => {
-            let k = str_key(key, "key");
-            Some(playfair_encrypt(input, &k))
-        }
-        "bifid" => {
-            let k = str_key(key, "key");
-            let period = param
-                .as_deref()
-                .and_then(|p| p.parse::<usize>().ok())
-                .unwrap_or(5);
-            Some(bifid_encrypt(input, &k, period))
-        }
-        "bacon" => {
-            let alphabet = str_key(key, "AB");
-            let mut chars = alphabet.chars();
-            let (a, b) = (chars.next().unwrap_or('A'), chars.next().unwrap_or('B'));
-            Some(bacon_encode(input, a, b))
-        }
-        "substitution" => {
-            let alphabet = str_key(key, "QWERTYUIOPASDFGHJKLZXCVBNM");
-            match substitution_map(&alphabet) {
-                Some(map) => Some(simple_substitution_encrypt(input, &map)),
-                None => {
-                    safe_println!(
-                        "{} Substitution key must be 26 unique letters.",
-                        "[ERROR]".red().bold()
-                    );
-                    return false;
-                }
-            }
-        }
-        "xor" => {
-            let k = key.as_deref().unwrap_or("key").as_bytes().to_vec();
-            if k.is_empty() {
-                safe_println!("{} Key cannot be empty for XOR cipher.", "[ERROR]".red().bold());
-                return false;
-            }
-            let encrypted = xor_encrypt(input.as_bytes(), &k);
-            let hex = encrypted.iter().map(|b| format!("{:02x}", b)).collect::<String>();
-            Some(hex)
-        }
-        _ => {
-            safe_println!(
-                "{} Unknown cipher '{}'. Use --list-ciphers to see supported ciphers.",
-                "[ERROR]".red().bold(),
-                cipher
-            );
-            return false;
-        }
-    };
-
-    match result {
-        Some(output) => {
-            safe_println!("{}", output);
-            true
-        }
-        None => {
-            safe_println!(
-                "{} Encryption failed. Check parameters.",
-                "[ERROR]".red().bold()
-            );
-            false
-        }
-    }
-}
-
 /// Square key from --key, column key from --cipher-param (or "K1,K2" in --key).
-fn split_key_or_param(
+pub(crate) fn split_key_or_param(
     key: &Option<String>,
     param: &Option<String>,
     default_col: &str,
@@ -278,7 +228,7 @@ fn split_key_or_param(
 }
 
 /// Build a plain→cipher map from a 26-letter key string.
-fn substitution_map(key: &str) -> Option<std::collections::HashMap<char, char>> {
+pub(crate) fn substitution_map(key: &str) -> Option<std::collections::HashMap<char, char>> {
     let letters: Vec<char> = key.to_ascii_uppercase().chars().collect();
     if letters.len() != 26 || !letters.iter().all(|c| c.is_ascii_alphabetic()) {
         return None;
@@ -290,177 +240,10 @@ fn substitution_map(key: &str) -> Option<std::collections::HashMap<char, char>> 
     Some(('A'..='Z').zip(letters).collect())
 }
 
-pub(crate) fn handle_decrypt(
-    input: &str,
-    cipher: &str,
-    key: &Option<String>,
-    param: &Option<String>,
-) -> bool {
-    use hashendra::core::scanner::*;
-    use hashendra::detectors::classic_ciphers::*;
-    use hashendra::detectors::classic_playfair::*;
-    use hashendra::detectors::classic_squares::*;
-    use hashendra::detectors::classic_transposition::*;
-    use hashendra::detectors::classic_vigenere::*;
+#[path = "compute_decrypt.rs"]
+mod compute_decrypt;
+#[path = "compute_encrypt.rs"]
+mod compute_encrypt;
 
-    safe_println!("{}", "\n── Decrypted Output ──".green().bold());
-    let result = match cipher {
-        "caesar" | "rot" => {
-            let shift = key.as_deref().and_then(|k| k.parse::<u8>().ok()).unwrap_or(3);
-            Some(caesar_encrypt(input, (26 - shift % 26) % 26))
-        }
-        "atbash" => Some(atbash_crypt(input)),
-        "vigenere" => {
-            let k = str_key(key, "key");
-            Some(vigenere_decode(input, &k))
-        }
-        "beaufort" | "porta" => {
-            // Self-reciprocal: same call decrypts.
-            let k = str_key(key, "key");
-            if cipher == "beaufort" {
-                Some(beaufort_crypt(input, &k))
-            } else {
-                Some(porta_crypt(input, &k))
-            }
-        }
-        "autokey" => {
-            let k = str_key(key, "key");
-            Some(autokey_decrypt(input, &k))
-        }
-        "gronsfeld" => {
-            let k = str_key(key, "2015");
-            Some(gronsfeld_decrypt(input, &k))
-        }
-        "affine" => {
-            let parts: Vec<&str> = key.as_deref().unwrap_or("5,8").split(',').collect();
-            let a = parts.first().and_then(|s| s.parse::<u8>().ok()).unwrap_or(5);
-            let b = parts.get(1).and_then(|s| s.parse::<u8>().ok()).unwrap_or(8);
-            affine_decrypt(input, a, b)
-        }
-        "rail-fence" | "railfence" => {
-            let rails = param
-                .as_deref()
-                .or(key.as_deref())
-                .and_then(|k| k.parse::<usize>().ok())
-                .unwrap_or(3);
-            Some(rail_fence_decode(input, rails))
-        }
-        "columnar" => {
-            let k = str_key(key, "key");
-            Some(columnar_decode(input, &columnar_order(&k)))
-        }
-        "polybius" => {
-            let k = key.clone().unwrap_or_default();
-            Some(polybius_decrypt(input, &k))
-        }
-        "tap" => Some(tap_decode(input)),
-        "adfgx" => {
-            let (sq, col) = split_key_or_param(key, param, "KEY");
-            Some(adfgx_decrypt(input, &sq, &col))
-        }
-        "adfgvx" => {
-            let (sq, col) = split_key_or_param(key, param, "KEY");
-            Some(adfgvx_decrypt(input, &sq, &col))
-        }
-        "four-square" | "foursquare" => {
-            let (k1, k2) = split_key(key);
-            Some(four_square_decrypt(input, &k1, &k2))
-        }
-        "two-square" | "twosquare" => {
-            let (k1, k2) = split_key(key);
-            Some(two_square_decrypt(input, &k1, &k2))
-        }
-        "trifid" => {
-            let k = str_key(key, "key");
-            let period = param
-                .as_deref()
-                .and_then(|p| p.parse::<usize>().ok())
-                .unwrap_or(5);
-            Some(trifid_decrypt(input, &k, period))
-        }
-        "playfair" => {
-            let k = str_key(key, "key");
-            Some(playfair_decode(input, &k))
-        }
-        "bifid" => {
-            let k = str_key(key, "key");
-            let period = param
-                .as_deref()
-                .and_then(|p| p.parse::<usize>().ok())
-                .unwrap_or(5);
-            Some(bifid_decrypt(input, &k, period))
-        }
-        "bacon" => {
-            let alphabet = str_key(key, "AB");
-            let mut chars = alphabet.chars();
-            let (a, b) = (chars.next().unwrap_or('A'), chars.next().unwrap_or('B'));
-            bacon_decode(input, a, b)
-        }
-        "substitution" => {
-            let alphabet = str_key(key, "QWERTYUIOPASDFGHJKLZXCVBNM");
-            match substitution_map(&alphabet) {
-                Some(enc_map) => {
-                    let dec_map: std::collections::HashMap<char, char> =
-                        enc_map.into_iter().map(|(plain, cipher)| (cipher, plain)).collect();
-                    Some(simple_substitution_decode(input, &dec_map))
-                }
-                None => {
-                    safe_println!(
-                        "{} Substitution key must be 26 unique letters.",
-                        "[ERROR]".red().bold()
-                    );
-                    return false;
-                }
-            }
-        }
-        "xor" => {
-            let k = key.as_deref().unwrap_or("key").as_bytes().to_vec();
-            if k.is_empty() {
-                safe_println!("{} Key cannot be empty for XOR cipher.", "[ERROR]".red().bold());
-                return false;
-            }
-            // Accept hex (what --encrypt emits) or raw bytes.
-            let data = decode_hex_lossy(input);
-            let decrypted = xor_encrypt(&data, &k);
-            Some(String::from_utf8_lossy(&decrypted).into_owned())
-        }
-        _ => {
-            safe_println!(
-                "{} Unknown cipher '{}'. Use --list-ciphers to see supported ciphers.",
-                "[ERROR]".red().bold(),
-                cipher
-            );
-            return false;
-        }
-    };
-
-    match result {
-        Some(output) => {
-            safe_println!("{}", output);
-            true
-        }
-        None => {
-            safe_println!(
-                "{} Decryption failed. Check parameters.",
-                "[ERROR]".red().bold()
-            );
-            false
-        }
-    }
-}
-
-/// Hex-decode if possible, else raw bytes (never fails).
-fn decode_hex_lossy(input: &str) -> Vec<u8> {
-    let clean: String = input.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-    if clean.len().is_multiple_of(2) && !clean.is_empty()
-        && let Ok(bytes) = (0..clean.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&clean[i..i + 2], 16))
-            .collect::<Result<Vec<u8>, _>>()
-    {
-        return bytes;
-    }
-    input.as_bytes().to_vec()
-}
-
-// safe_print! is defined in utils/io.rs via #[macro_export]
+pub(crate) use compute_decrypt::handle_decrypt;
+pub(crate) use compute_encrypt::{handle_encrypt, print_encryption_ciphers};

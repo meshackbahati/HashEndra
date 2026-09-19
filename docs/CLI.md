@@ -206,6 +206,13 @@ hashendra --encrypt xor --key "key" "secret message"
 # Decrypt with ciphers (same key formats; full table in CIPHERS.md)
 hashendra --decrypt vigenere --key "secret" "LXFOPV..."
 hashendra --decrypt adfgx --key "SQUARE,COLUMN" "DFAXFA..."
+
+# Modern crypto (keys/IVs are hex)
+hashendra --encrypt aes-cbc --key <keyhex> --cipher-param <ivhex> "msg"
+hashendra --decrypt aes-ecb --key <keyhex> "<cthex>"
+hashendra --encrypt rsa --key "<n>,<e>" "<mhex>"
+hashendra --encrypt rsa-keygen --cipher-param 512
+hashendra --hash hmac-sha256 --key "Jefe" "what do ya want for nothing?"
 ```
 
 ### Cipher Cracking

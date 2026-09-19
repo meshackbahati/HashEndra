@@ -54,10 +54,12 @@ fn main() -> std::process::ExitCode {
         return std::process::ExitCode::SUCCESS;
     }
 
+    // Key generation needs no input.
+    if cli.encrypt.as_deref() == Some("rsa-keygen") {
+        ok &= handle_encrypt("", "rsa-keygen", &cli.key, &cli.cipher_param);
     // Operations that require input
-    if let Some(ref input) = cli.input {
-        if let Some(algo) = cli.hash {
-            ok &= handle_hash(input, algo.as_deref());
+    } else if let Some(ref input) = cli.input {        if let Some(algo) = cli.hash {
+            ok &= handle_hash(input, algo.as_deref(), &cli.key);
         } else if let Some(ref cipher) = cli.encrypt {
             ok &= handle_encrypt(input, cipher, &cli.key, &cli.cipher_param);
         } else if let Some(ref cipher) = cli.decrypt {

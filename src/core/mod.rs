@@ -1,6 +1,8 @@
 pub mod cryptanalysis;
 pub mod crack;
 pub mod basecodecs;
+pub mod rsa;
+pub mod symmetric;
 pub mod evm;
 pub mod tls;
 pub mod encoder;

@@ -387,6 +387,25 @@ hashendra evm 0xa9059cbb0000...   # pasted calldata works, first 4 bytes used
 
 ---
 
+### 15. Modern crypto (offline)
+
+AES-CBC/ECB (128/192/256, PKCS7), textbook RSA, and HMAC. Keys and IVs
+are hex; RSA components are `n-hex,e-hex` / `n-hex,d-hex` pairs:
+
+```bash
+hashendra --encrypt aes-cbc --key <keyhex> --cipher-param <ivhex> "secret msg"
+hashendra --decrypt aes-cbc --key <keyhex> --cipher-param <ivhex> "<cthex>"
+hashendra --encrypt rsa --key "<n>,<e>" "<mhex>"
+hashendra --decrypt rsa --key "<n>,<d>" "<chex>"
+hashendra --encrypt rsa-keygen --cipher-param 512   # prints n/e/d, no input needed
+hashendra --hash hmac-sha256 --key "Jefe" "what do ya want for nothing?"
+```
+
+RSA here is the raw primitive (CTF math, keygen included) — not padded
+PKCS#1. ECB is offered for compatibility; it leaks patterns by design.
+
+---
+
 ## Classical Cipher Suite
 
 Every cipher supports `--encrypt` and `--decrypt` — see [Cipher Usage](docs/CIPHERS.md)

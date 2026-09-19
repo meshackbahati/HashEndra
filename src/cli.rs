@@ -76,7 +76,7 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Encrypt input using a cipher. Usage: --encrypt <cipher> --key <key> [--cipher-param <p>]. Ciphers: caesar, atbash, vigenere, beaufort, autokey, gronsfeld, porta, affine, rail-fence, columnar, polybius, tap, adfgx, adfgvx, four-square, two-square, trifid, playfair, bifid, bacon, substitution, xor"
+        help = "Encrypt input using a cipher. Usage: --encrypt <cipher> --key <key> [--cipher-param <p>]. Ciphers: caesar, atbash, vigenere, beaufort, autokey, gronsfeld, porta, affine, rail-fence, columnar, polybius, tap, adfgx, adfgvx, four-square, two-square, trifid, playfair, bifid, bacon, substitution, xor, aes-cbc, aes-ecb, rsa, rsa-keygen"
     )]
     pub(crate) encrypt: Option<String>,
 
@@ -88,7 +88,7 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Decrypt input using a cipher. Same names/keys as --encrypt. Key formats: shift number (caesar), keyword (most), a,b (affine), K1,K2 (four/two-square), 2-char alphabet (bacon), 26-letter alphabet (substitution); --cipher-param sets rails (rail-fence), period (trifid/bifid), column key (adfgx/adfgvx)"
+        help = "Decrypt input using a cipher. Same names/keys as --encrypt (caesar through rsa-keygen). Key formats: shift number (caesar), keyword (most), a,b (affine), K1,K2 (four/two-square), 2-char alphabet (bacon), 26-letter alphabet (substitution), hex key/iv (aes), n-hex,e/d-hex (rsa); --cipher-param sets rails (rail-fence), period (trifid/bifid), column key (adfgx/adfgvx), bits (rsa-keygen)"
     )]
     pub(crate) decrypt: Option<String>,
 
