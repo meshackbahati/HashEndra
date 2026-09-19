@@ -159,6 +159,14 @@ pub fn encode_binary(data: &[u8]) -> String {
         .join(" ")
 }
 
+/// Encodes input bytes to decimal string (space-separated byte values).
+pub fn encode_decimal(data: &[u8]) -> String {
+    data.iter()
+        .map(|b| b.to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Encodes input bytes to octal string (space-separated).
 pub fn encode_octal(data: &[u8]) -> String {
     data.iter()
@@ -246,7 +254,7 @@ pub fn encode_ascii85(data: &[u8]) -> String {
 
 pub const ENCODING_FORMATS: &[&str] = &[
     "base64", "base64url", "base32", "base32hex", "base58", "base58check", "base62",
-    "base91", "hex", "hexupper", "url", "html", "qp", "binary", "octal", "morse",
+    "base91", "hex", "hexupper", "url", "html", "qp", "binary", "octal", "decimal", "morse",
     "ascii85", "crockford", "uuencode", "xxencode", "z85",
 ];
 
@@ -269,6 +277,7 @@ pub fn encode_to_format(input: &str, format: &str) -> Result<String, String> {
         "qp" | "quoted-printable" => Ok(encode_quoted_printable(data)),
         "binary" => Ok(encode_binary(data)),
         "octal" => Ok(encode_octal(data)),
+        "decimal" | "dec" => Ok(encode_decimal(data)),
         "morse" => Ok(encode_morse(input)),
         "ascii85" | "a85" => Ok(encode_ascii85(data)),
         "crockford" => Ok(crate::core::basecodecs::encode_crockford(data)),

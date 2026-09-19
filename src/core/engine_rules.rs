@@ -119,12 +119,50 @@ pub(crate) fn xor_result_beats_input(input: &str, decoded: &str, input_chi: f32)
 }
 
 pub(crate) fn should_stop_on_result(s: &str) -> bool {
+    if is_flag_shaped(s) {
+        return true;
+    }
+    looks_like_plaintext(s)
+}
+
+/// The conservative gate: input that already reads as finished plaintext
+/// must not gain another layer. Flag-shaped text is deliberately NOT
+/// included — a rot13'd flag still wears braces, and skipping it would
+/// miss the decode.
+pub(crate) fn looks_like_plaintext(s: &str) -> bool {
     let lower = s.to_lowercase();
     let markers = ["the", "and", "hello", "world", "flag", "json", "http"];
     is_meaningful_plaintext_candidate(s)
         && (s.contains(' ')
             || crate::core::cryptanalysis::contains_english_patterns(&lower) > 0.08
             || markers.iter().any(|marker| lower.contains(marker)))
+}
+
+/// Flag-shaped output (`G24{...}`, `flag{...}`): braces with a non-trivial
+/// alphanumeric inside. CTF decodes land here; nothing else in the engine
+/// produces this shape by accident at these lengths. Also used to surface
+/// flag-shaped rows first in brute-force listings.
+pub fn is_flag_shaped(s: &str) -> bool {
+    let Some(open) = s.find('{') else {
+        return false;
+    };
+    let Some(close) = s.rfind('}') else {
+        return false;
+    };
+    if close <= open + 6 {
+        return false;
+    }
+    if s.len() > 200 {
+        return false;
+    }
+    if !s.is_char_boundary(open + 1) || !s.is_char_boundary(close) {
+        return false;
+    }
+    let inside = &s[open + 1..close];
+    inside.chars().filter(|c| c.is_ascii_alphabetic()).count() >= 4
+        && inside.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '!' | '?' | ' ')
+        })
 }
 
 pub(crate) fn is_meaningful_plaintext_candidate(s: &str) -> bool {

@@ -28,7 +28,7 @@ pub(crate) struct Cli {
     #[arg(help = "The hash or encoded string to analyze")]
     pub(crate) input: Option<String>,
 
-    #[arg(short, long, help = "File to read hashes from")]
+    #[arg(short, long, help = "File to read hashes from, e.g. -f hashes.txt")]
     pub(crate) file: Option<String>,
 
     #[arg(short, long, help = "Output in JSON format")]
@@ -37,16 +37,16 @@ pub(crate) struct Cli {
     #[arg(short, long, help = "Verbose mode")]
     pub(crate) verbose: bool,
 
-    #[arg(long, help = "Attempt to decode the input")]
+    #[arg(long, help = "Attempt to decode the input, e.g. --decode \"aGVsbG8=\"")]
     pub(crate) decode: bool,
 
-    #[arg(long, help = "Run deep recursive decryption (multi-layer)")]
+    #[arg(long, help = "Run deep recursive decryption (multi-layer), e.g. --deep-decrypt \"NzI3Ng==\"")]
     pub(crate) deep_decrypt: bool,
 
-    #[arg(long, help = "Brute-force ROT cipher")]
+    #[arg(long, help = "Brute-force ROT cipher, e.g. --rot \"Uryyb Jbeyq\"")]
     pub(crate) rot: bool,
 
-    #[arg(long, help = "Crack single-byte XOR")]
+    #[arg(long, help = "Crack single-byte XOR, e.g. --xor \"1b37373331363f78\"")]
     pub(crate) xor: bool,
 
     #[arg(
@@ -58,16 +58,22 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Compute a cryptographic hash of the input. Optionally specify algorithm: md5, sha1, sha256, sha512, blake3, etc. Use --list-hashes to see all."
+        help = "Compute a cryptographic hash of the input, e.g. --hash sha256 \"hello\". Optionally specify algorithm: md5, sha1, sha256, sha512, blake3, hmac-sha256, hmac-sha512 (HMAC needs --key). Use --list-hashes to see all."
     )]
     pub(crate) hash: Option<Option<String>>,
+
+    #[arg(
+        long,
+        help = "With --hash: decode INPUT as hex first (hash raw bytes, e.g. --hash sha256 --hex-input <modulus-hex>)"
+    )]
+    pub(crate) hex_input: bool,
 
     #[arg(long, help = "List supported hash algorithms and exit")]
     pub(crate) list_hashes: bool,
 
     #[arg(
         long,
-        help = "Encode input to a format: base64, base64url, base32, base58, hex, url, html, qp, binary, octal, morse, ascii85"
+        help = "Encode input to a format, e.g. --to base64 \"hello\". Formats: base64, base64url, base32, base58, hex, url, html, qp, binary, octal, morse, ascii85, base32hex, base62, base91, z85, crockford, uuencode, xxencode"
     )]
     pub(crate) to: Option<String>,
 
@@ -82,7 +88,7 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Decode input as one explicit format (no guessing): base64, hex, base32hex, base58check, base62, base91, crockford, uuencode, xxencode, z85, ..."
+        help = "Decode input as one explicit format (no guessing), e.g. --from base91 \"<text>\": base64, hex, base32hex, base58check, base62, base91, crockford, uuencode, xxencode, z85, ..."
     )]
     pub(crate) from: Option<String>,
 
@@ -94,13 +100,13 @@ pub(crate) struct Cli {
 
     #[arg(
         long,
-        help = "Key for encryption ciphers (shift number for caesar, 'a,b' for affine, string key for others)"
+        help = "Key for ciphers (e.g. --key 13, --key SECRET, --key \"5,8\") or HMAC (e.g. --key Jefe)"
     )]
     pub(crate) key: Option<String>,
 
     #[arg(
         long,
-        help = "Additional cipher parameter (number of rails for rail-fence)"
+        help = "Additional cipher parameter, e.g. rails (--cipher-param 4), period, column key, IV hex, or RSA keygen bits"
     )]
     pub(crate) cipher_param: Option<String>,
 
@@ -220,8 +226,10 @@ pub(crate) enum Commands {
         depth: Option<usize>,
     },
     /// Start an interactive decoding workshop
+    #[command(after_help = "Examples:\n  hashendra workshop\n  hashendra workshop \"SGVsbG8gV29ybGQ=\"")]
     Workshop { input: Option<String> },
     /// Crack a password hash against a wordlist (streaming, low memory)
+    #[command(after_help = "Examples:\n  hashendra crack 5f4dcc3b5aa765d61d8327deb882cf99 -w rockyou.txt\n  hashendra crack <hash> -w rockyou.txt --rules --speed turbo")]
     Crack {
         /// Hex-encoded hash to crack
         hash: String,
@@ -239,26 +247,36 @@ pub(crate) enum Commands {
         max_candidates: Option<u64>,
     },
     /// Look up a TLS cipher suite by hex code (offline table)
+    #[command(after_help = "Examples:\n  hashendra tls 1301\n  hashendra tls 0xC02F")]
     Tls {
         /// Suite code like 1301 or 0xC02F
         code: String,
     },
     /// Look up an EVM function selector (offline table, accepts calldata)
+    #[command(after_help = "Examples:\n  hashendra evm a9059cbb\n  hashendra evm 0xa9059cbb0000000000000000000000007a25...")]
     Evm {
         /// Selector like a9059cbb, with or without 0x
         selector: String,
+    },
+    /// RSA CTF attacks: shared-prime gcd, Wiener, Hastad broadcast, Fermat
+    #[command(after_help = "Examples:\n  hashendra rsa gcd <n1hex> <n2hex>\n  hashendra rsa fermat <nhex>")]
+    Rsa {
+        #[command(subcommand)]
+        command: RsaCommands,
     },
 }
 
 #[derive(Subcommand)]
 pub(crate) enum ForensicCommands {
     /// Run forensic analysis on a file or directory
+    #[command(after_help = "Examples:\n  hashendra forensic scan image.jpg\n  hashendra forensic scan disk.dd --no-extract\n  hashendra -j forensic scan evidence.raw | jq .hits")]
     Scan {
         path: String,
         #[arg(long, help = "Do not carve embedded artifacts to disk")]
         no_extract: bool,
     },
     /// Inspect a disk image or volume and optionally focus on a specific filesystem
+    #[command(after_help = "Examples:\n  hashendra forensic disk disk.dd\n  hashendra forensic disk disk.dd --fs ntfs --deleted-only --extract-data recovered/")]
     Disk {
         path: String,
         #[arg(long, default_value_t = 512, help = "Sector size for partition math")]
@@ -302,6 +320,7 @@ pub(crate) enum ForensicCommands {
         btrfs: bool,
     },
     /// Carve embedded files like a dedicated extractor
+    #[command(after_help = "Examples:\n  hashendra forensic carve disk.dd -o carved/\n  hashendra forensic carve firmware.bin --types png,pdf --dry-run\n  hashendra forensic carve --list-types")]
     Carve {
         #[arg(required_unless_present_any = ["list_types", "input"])]
         path: Option<String>,
@@ -415,4 +434,31 @@ pub(crate) struct CarveOptions<'a> {
     pub(crate) list_types: bool,
     pub(crate) matryoshka: bool,
     pub(crate) depth: Option<usize>,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum RsaCommands {
+    /// Shared prime between two moduli (hex n1, hex n2)
+    #[command(after_help = "Example:\n  hashendra rsa gcd <n1hex> <n2hex>")]
+    Gcd { n1: String, n2: String },
+    /// Wiener attack for small private exponents (hex n, hex e)
+    #[command(after_help = "Example:\n  hashendra rsa wiener <nhex> <ehex>")]
+    Wiener { n: String, e: String },
+    /// Hastad broadcast attack, e=3 (hex c1, n1, c2, n2, c3, n3)
+    #[command(after_help = "Example:\n  hashendra rsa hastad <c1> <n1> <c2> <n2> <c3> <n3>")]
+    Hastad {
+        c1: String,
+        n1: String,
+        c2: String,
+        n2: String,
+        c3: String,
+        n3: String,
+    },
+    /// Fermat factorisation for close primes (hex n)
+    #[command(after_help = "Example:\n  hashendra rsa fermat E8D6CA6163 --max-iter 5000000")]
+    Fermat {
+        n: String,
+        #[arg(long, default_value_t = 1000000, help = "Search iterations")]
+        max_iter: u64,
+    },
 }

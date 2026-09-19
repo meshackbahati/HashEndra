@@ -165,6 +165,28 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
     }
 }
 
+/// Decodes decimal byte values ("72 101 108 108 111", commas/newlines also
+/// accepted). Every token must be 0-255; anything else returns None.
+pub fn decode_decimal(input: &str) -> Option<Vec<u8>> {
+    let mut result = Vec::new();
+    for token in input.split([',', '\n', '\r', '\t', ' ']) {
+        let token = token.trim().trim_end_matches(['.', ';', ':']);
+        if token.is_empty() {
+            continue;
+        }
+        match token.parse::<u8>() {
+            Ok(byte) => result.push(byte),
+            Err(_) => return None,
+        }
+    }
+
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
+}
+
 pub fn decode_octal(input: &str) -> Option<Vec<u8>> {
     let normalized = input
         .replace("0o", " ")

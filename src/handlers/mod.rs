@@ -6,6 +6,7 @@ pub mod decode;
 pub mod disk;
 pub mod inspect;
 pub mod lookup;
+pub mod rsa;
 pub mod scan;
 pub mod workshop;
 pub mod workshop_ciphers;
@@ -20,6 +21,7 @@ pub(crate) use crack::{run_crack, CrackArgs};
 pub(crate) use decode::{handle_decode, handle_decode_format, handle_deep_decrypt, handle_rot, handle_xor};
 pub(crate) use disk::run_forensic_disk;
 pub(crate) use lookup::{run_evm_lookup, run_tls_lookup};
+pub(crate) use rsa::run_rsa_command;
 pub(crate) use scan::run_forensic_scan;
 pub(crate) use workshop::run_workshop;
 

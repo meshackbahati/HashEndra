@@ -145,7 +145,7 @@ pub(crate) fn handle_encrypt(
             Some(hex)
         }
         "aes-cbc" => {
-            let (k, iv) = match hex_key_iv(key, param) {
+            let (k, iv) = match hex_key_iv(key, param, "AES-CBC") {
                 Some(pair) => pair,
                 None => return false,
             };
@@ -163,6 +163,19 @@ pub(crate) fn handle_encrypt(
                 None => return false,
             };
             match hashendra::core::symmetric::aes_ecb_encrypt(&k, input.as_bytes()) {
+                Ok(ct) => Some(hex_of(&ct)),
+                Err(e) => {
+                    safe_println!("{} {}", "[ERROR]".red().bold(), e);
+                    return false;
+                }
+            }
+        }
+        "aes-gcm" => {
+            let (k, nonce) = match hex_key_iv(key, param, "AES-GCM") {
+                Some(pair) => pair,
+                None => return false,
+            };
+            match hashendra::core::symmetric::aes_gcm_encrypt(&k, &nonce, input.as_bytes()) {
                 Ok(ct) => Some(hex_of(&ct)),
                 Err(e) => {
                     safe_println!("{} {}", "[ERROR]".red().bold(), e);

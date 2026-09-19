@@ -210,9 +210,15 @@ hashendra --decrypt adfgx --key "SQUARE,COLUMN" "DFAXFA..."
 # Modern crypto (keys/IVs are hex)
 hashendra --encrypt aes-cbc --key <keyhex> --cipher-param <ivhex> "msg"
 hashendra --decrypt aes-ecb --key <keyhex> "<cthex>"
+# AES-GCM: 12-byte nonces are standard; other lengths (e.g. 16) use the
+# GHASH J0 derivation, matching PyCryptodome. Tag is appended to the
+# ciphertext; wrong key/nonce/tag fails closed, never prints garbage.
+hashendra --decrypt aes-gcm --key <keyhex16> --cipher-param <noncehex> "<cthex><taghex>"
 hashendra --encrypt rsa --key "<n>,<e>" "<mhex>"
 hashendra --encrypt rsa-keygen --cipher-param 512
 hashendra --hash hmac-sha256 --key "Jefe" "what do ya want for nothing?"
+# Hash decoded hex bytes (KDF inputs, key material) instead of the text
+hashendra --hash sha256 --hex-input <hexbytes>
 ```
 
 ### Cipher Cracking

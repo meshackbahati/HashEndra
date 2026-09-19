@@ -8,8 +8,8 @@ use handlers::{
     analyze_file, analyze_single_input, handle_decode, handle_decode_format, handle_decrypt,
     handle_deep_decrypt, handle_encode, handle_encrypt, handle_hash, handle_rot, handle_xor,
     print_banner, print_encoding_formats, print_encryption_ciphers, print_hash_algorithms,
-    run_carve, run_crack, run_evm_lookup, run_forensic_disk, run_forensic_scan, run_tls_lookup,
-    run_workshop, CrackArgs,
+    run_carve, run_crack, run_evm_lookup, run_forensic_disk, run_forensic_scan, run_rsa_command,
+    run_tls_lookup, run_workshop, CrackArgs,
 };
 use hashendra::core::patterns::EXTERNAL_SIGNATURE_COUNT;
 use hashendra::safe_println;
@@ -59,7 +59,7 @@ fn main() -> std::process::ExitCode {
         ok &= handle_encrypt("", "rsa-keygen", &cli.key, &cli.cipher_param);
     // Operations that require input
     } else if let Some(ref input) = cli.input {        if let Some(algo) = cli.hash {
-            ok &= handle_hash(input, algo.as_deref(), &cli.key);
+            ok &= handle_hash(input, algo.as_deref(), &cli.key, cli.hex_input);
         } else if let Some(ref cipher) = cli.encrypt {
             ok &= handle_encrypt(input, cipher, &cli.key, &cli.cipher_param);
         } else if let Some(ref cipher) = cli.decrypt {
@@ -292,6 +292,9 @@ fn main() -> std::process::ExitCode {
             }
             Commands::Evm { selector } => {
                 ok &= run_evm_lookup(&selector, cli.json);
+            }
+            Commands::Rsa { command } => {
+                ok &= run_rsa_command(&command, cli.json);
             }
         }
     } else {

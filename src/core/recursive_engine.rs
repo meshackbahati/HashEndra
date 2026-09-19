@@ -1,9 +1,10 @@
 use crate::core::scanner::{
-    decode_ascii85, decode_base32, decode_base58, decode_base64, decode_binary, decode_hex,
-    decode_html_entities, decode_morse, decode_octal, decode_quoted_printable, decode_url,
+    decode_ascii85, decode_base32, decode_base58, decode_base64, decode_binary, decode_decimal,
+    decode_hex, decode_html_entities, decode_morse, decode_octal, decode_quoted_printable,
+    decode_url,
 };
 use super::engine_rules::{
-    is_likely_ciphertext, is_meaningful_plaintext_candidate, is_valid_plaintext,
+    is_likely_ciphertext, is_meaningful_plaintext_candidate, is_valid_plaintext, looks_like_plaintext,
     should_stop_on_result, xor_result_beats_input,
 };
 use std::sync::{Arc, Mutex};
@@ -178,6 +179,17 @@ impl RecursiveEngine {
                     });
                 }
 
+        if let Some(dec) = decode_decimal(input)
+            && let Ok(s) = String::from_utf8(dec)
+                && is_valid_plaintext(&s) {
+                    candidates.push(DecodeStep {
+                        layer: depth,
+                        decoder: "Decimal".to_string(),
+                        result: s,
+                        confidence: 0.90,
+                    });
+                }
+
         if let Some(dec) = decode_ascii85(input)
             && let Ok(s) = String::from_utf8(dec)
                 && is_valid_plaintext(&s) {
@@ -244,7 +256,7 @@ impl RecursiveEngine {
         // Skip only if the input already reads as finished plaintext —
         // a spaced-out sentence like "Hello World" must not gain a layer,
         // but spaced *ciphertext* ("Uryyb Jbeyq") still gets cracked.
-        if !should_stop_on_result(input) {
+        if !looks_like_plaintext(input) {
             use crate::core::cryptanalysis::chi_squared_score;
             use crate::core::scanner::rot_brute_force;
             use crate::detectors::classic_ciphers::atbash_decode;
@@ -266,9 +278,12 @@ impl RecursiveEngine {
             // Prefer a shift that lands on recognizable plaintext: on short
             // inputs Chi-Squared alone picks winners by luck, but a result
             // containing real markers ("hello", "flag", spaces) is evidence.
+            // Note: brace shape alone does NOT count here — ciphertext keeps
+            // its braces through a Caesar shift, so every shift of a flag
+            // would "trip" and the preference would degenerate to pure Chi-2.
             let pick = shifts
                 .iter()
-                .find(|(_, decoded)| should_stop_on_result(decoded))
+                .find(|(_, decoded)| looks_like_plaintext(decoded))
                 .or_else(|| shifts.first());
             if let Some((_, caesar_res)) = pick {
                 candidates.push(DecodeStep {

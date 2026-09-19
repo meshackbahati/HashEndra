@@ -114,6 +114,7 @@ pub(crate) fn handle_decode_format(input: &str, format: &str) -> bool {
         "qp" | "quoted-printable" => d::decode_quoted_printable(input),
         "binary" => decode_binary(input),
         "octal" => decode_octal(input),
+        "decimal" | "dec" => d::decode_decimal(input),
         "morse" => d::decode_morse(input).map(|s| s.into_bytes()),
         "crockford" => basecodecs::decode_crockford(input),
         "uuencode" | "uu" => basecodecs::decode_uu(input),
@@ -186,31 +187,40 @@ pub(crate) fn handle_rot(input: &str) -> bool {
 }
 
 pub(crate) fn handle_xor(input: &str) -> bool {
+    use hashendra::core::is_flag_shaped;
     use hashendra::core::scanner::{decode_hex, xor_crack};
     safe_println!("[XOR] Attempting single-byte XOR crack...");
 
-    // Try as raw ASCII bytes first (the most common use case)
-    let raw_results = xor_crack(input.as_bytes());
-    if !raw_results.is_empty() {
-        safe_println!("  [as raw ASCII bytes]:");
-        for (key, decoded, score) in raw_results.iter().take(3) {
-            safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
+    // Print helper: flag-shaped rows first (this is a CTF tool and short
+    // inputs make pure statistical ranking noisy), then by score.
+    // The ordering is for human triage; scores are untouched.
+    let print_top = |label: &str, results: &[(u8, String, f64)]| {
+        let mut order: Vec<usize> = (0..results.len()).collect();
+        order.sort_by_key(|&i| (!is_flag_shaped(&results[i].1), i));
+        safe_println!("  [{label}]:");
+        for &i in order.iter().take(5) {
+            let (key, decoded, score) = &results[i];
+            safe_println!("    Key 0x{key:02x} (Score {score:.2}): {decoded}");
         }
-        return true;
-    }
+    };
 
-    // Fall back to hex-decoded if input looks like hex and raw didn't work
+    // Hex-looking input gets both readings: hex-decoded bytes first (a hex
+    // blob is rarely meant as literal ASCII), then raw bytes. Either section
+    // can hold the answer, so both print.
     if input.len().is_multiple_of(2)
         && input.chars().all(|c| c.is_ascii_hexdigit())
         && let Some(bytes) = decode_hex(input) {
         let hex_results = xor_crack(&bytes);
         if !hex_results.is_empty() {
-            safe_println!("  [as hex-decoded bytes]:");
-            for (key, decoded, score) in hex_results.iter().take(3) {
-                safe_println!("    Key 0x{:02x} (Score {:.2}): {}", key, score, decoded);
-            }
-            return true;
+            print_top("as hex-decoded bytes", &hex_results);
         }
+    }
+
+    // Try as raw ASCII bytes (the most common use case for plain text).
+    let raw_results = xor_crack(input.as_bytes());
+    if !raw_results.is_empty() {
+        print_top("as raw ASCII bytes", &raw_results);
+        return true;
     }
 
     safe_println!("[FAIL] No plaintext found with XOR crack.");

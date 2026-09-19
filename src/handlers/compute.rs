@@ -36,11 +36,16 @@ pub(crate) fn hex_key(key: &Option<String>) -> Option<Vec<u8>> {
     }
 }
 
-pub(crate) fn hex_key_iv(key: &Option<String>, param: &Option<String>) -> Option<(Vec<u8>, Vec<u8>)> {    let k = hex_key(key)?;
+pub(crate) fn hex_key_iv(key: &Option<String>, param: &Option<String>, what: &str) -> Option<(Vec<u8>, Vec<u8>)> {
+    let k = hex_key(key)?;
     let iv = match param {
         Some(p) => hex_arg(p, "IV")?,
         None => {
-            safe_println!("{} CBC needs --cipher-param <iv-hex>.", "[ERROR]".red().bold());
+            safe_println!(
+                "{} {} needs --cipher-param <iv/nonce-hex>.",
+                "[ERROR]".red().bold(),
+                what
+            );
             return None;
         }
     };
@@ -111,7 +116,35 @@ pub(crate) fn print_encoding_formats() {
     }
 }
 
-pub(crate) fn handle_hash(input: &str, algorithm: Option<&str>, key: &Option<String>) -> bool {
+pub(crate) fn handle_hash(
+    input: &str,
+    algorithm: Option<&str>,
+    key: &Option<String>,
+    hex_input: bool,
+) -> bool {
+    // --hex-input: hash the decoded bytes (KDF inputs, key material).
+    if hex_input {
+        return match hashendra::core::scanner::decode_hex(input) {
+            Some(bytes) => handle_hash_bytes(&bytes, algorithm, key),
+            None => {
+                safe_println!("{} Input is not valid hex.", "[ERROR]".red().bold());
+                false
+            }
+        };
+    }
+    handle_hash_str(input, algorithm, key)
+}
+
+/// String-input hashing (shared tail for text and hex-decoded paths).
+fn handle_hash_str(input: &str, algorithm: Option<&str>, key: &Option<String>) -> bool {
+    handle_hash_bytes(input.as_bytes(), algorithm, key)
+}
+
+fn handle_hash_bytes(
+    data: &[u8],
+    algorithm: Option<&str>,
+    key: &Option<String>,
+) -> bool {
     // HMAC needs a key; everything else goes through the algorithm table.
     if let Some(name) = algorithm {
         let lower = name.to_ascii_lowercase();
@@ -124,9 +157,9 @@ pub(crate) fn handle_hash(input: &str, algorithm: Option<&str>, key: &Option<Str
                 return false;
             };
             let mac = if lower == "hmac-sha256" {
-                hashendra::core::symmetric::hmac_sha256(k.as_bytes(), input.as_bytes())
+                hashendra::core::symmetric::hmac_sha256(k.as_bytes(), data)
             } else {
-                hashendra::core::symmetric::hmac_sha512(k.as_bytes(), input.as_bytes())
+                hashendra::core::symmetric::hmac_sha512(k.as_bytes(), data)
             };
             safe_println!("{}", "\n── Hash Results ──".green().bold());
             safe_println!(
@@ -162,7 +195,6 @@ pub(crate) fn handle_hash(input: &str, algorithm: Option<&str>, key: &Option<Str
         ]
     };
 
-    let data = input.as_bytes();
     safe_println!("{}", "\n── Hash Results ──".green().bold());
     for algo in &algos {
         let digest = compute_hash(data, algo);
