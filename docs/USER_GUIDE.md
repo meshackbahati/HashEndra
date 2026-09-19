@@ -1,17 +1,11 @@
 # HashEndra User Guide
 
-## What is HashEndra?
+## What HashEndra does
 
-HashEndra is a universal forensic analysis toolkit that can:
-
-1. **Identify** hash types, encodings, and ciphertext automatically
-2. **Decode** multi-layer encoded payloads recursively
-3. **Crack** classical ciphers (ROT, XOR, Vigenere, Affine)
-4. **Compute** hashes and encode data in 13+ formats
-5. **Carve** embedded files from disk images and binaries
-6. **Inspect** metadata from 20+ file formats
-7. **Analyze** disk images (NTFS, FAT, ext4, Btrfs)
-8. **Measure** entropy and detect file boundaries
+HashEndra identifies hashes, encodings, and ciphertext from a string,
+then decodes, decrypts, or cracks them as appropriate. It also
+inspects files and disk images for metadata, embedded content, and
+filesystem structures. The sections below follow that order.
 
 ## Quick Start
 
@@ -40,9 +34,9 @@ hashendra --deep-decrypt "NzIzNjg2OTZkNjk2ZQ=="
 ```
 
 This recursively unwraps each layer. It stops at plaintext, on revisit,
-or at 10 layers — and says so honestly if it never gets there. Short or
-ambiguous input may stop after one layer; check `--rot` / `--xor` output
-directly in that case.
+or at 10 layers, and reports the stopping condition when it never
+reaches plaintext. Short or ambiguous input may stop after one layer;
+check `--rot` and `--xor` output directly in that case.
 
 ### Carve files from a disk image
 
@@ -52,14 +46,14 @@ hashendra forensic carve disk_image.dd -o carved/
 
 ## Detection System
 
-HashEndra uses a multi-factor scoring system:
+HashEndra scores candidates on several independent measurements:
 
-- **Pattern matching** — Regular expression matching against 200+ signatures
-- **Length analysis** — Hash lengths map to specific algorithms
-- **Entropy calculation** — Shannon entropy in bits/character
-- **Charset detection** — Hex, Base64, ASCII, Base58, Binary, etc.
-- **Context weighting** — Network vs. database vs. filesystem context
-- **Validation** — Actual decoding to verify correctness
+- **Pattern matching**: regular expressions matched against the signature set
+- **Length analysis**: hash lengths mapped to candidate algorithms
+- **Entropy calculation**: Shannon entropy in bits per character
+- **Charset detection**: hex, Base64, ASCII, Base58, binary, and others
+- **Context weighting**: network, database, and filesystem contexts adjust scores
+- **Validation**: trial decoding to confirm a candidate before reporting it
 
 ### Detection Contexts
 
@@ -106,7 +100,7 @@ Use `--context` to improve detection accuracy:
 | SHA-256 | `sha256` | 1400 |
 | SHA-384 | `sha384` | 1410 |
 | SHA-512 | `sha512` | 1700 |
-| BLAKE3 | `blake3` | — |
+| BLAKE3 | `blake3` | n/a |
 
 ## Classical Ciphers
 
@@ -150,16 +144,16 @@ HashEndra automatically deduplicates carved files using BLAKE3 hashing. If the s
 
 ### Safety
 
-A hard 10 GiB extraction quota is enforced at the carving engine level. This cannot be bypassed via command-line options — it is compiled into the binary.
+A hard 10 GiB extraction quota is enforced at the carving engine level. It cannot be bypassed with command-line options because it is compiled into the binary.
 
 ## Disk Forensics
 
 ### Supported Filesystems
 
-- **NTFS** — MFT parsing, resident/stream data, deleted entry recovery, `$Bitmap`, `$LogFile`
-- **FAT12/16/32** — BPB parsing, directory entries, long filename support, deleted entry recovery
-- **ext2/3/4** — Superblock parsing, inode tables, extent trees, deleted inode recovery
-- **Btrfs** — Superblock parsing
+- **NTFS**: MFT parsing, resident and stream data, deleted entry recovery, `$Bitmap`, `$LogFile`
+- **FAT12/16/32**: BPB parsing, directory entries, long filename support, deleted entry recovery
+- **ext2/3/4**: superblock parsing, inode tables, extent trees, deleted inode recovery
+- **Btrfs**: superblock parsing
 
 ### Disk Inspection
 
@@ -214,19 +208,19 @@ Extracted metadata includes:
 
 HashEndra provides binwalk-style entropy analysis:
 
-- **Rolling entropy** — Sliding window Shannon entropy
-- **Boundary detection** — Identifies transitions between low/high entropy
-- **Segment classification** — Labels regions as low/medium/high/very-high entropy
-- **ASCII visualization** — Bar chart for inline display
+- **Rolling entropy**: sliding-window Shannon entropy
+- **Boundary detection**: transitions between low and high entropy regions
+- **Segment classification**: regions labeled low, medium, high, or very-high entropy
+- **ASCII visualization**: bar chart for inline display
 
 ### Interpreting Entropy
 
 | Entropy Range | Typical Content |
 |---|---|
-| 0.0 – 2.0 | Compressed, encrypted, or empty data |
-| 2.0 – 4.0 | Binary code, structured data |
-| 4.0 – 6.0 | Mixed content, partially structured |
-| 6.0 – 8.0 | Text, high-information payloads |
+| 0.0-2.0 | Compressed, encrypted, or empty data |
+| 2.0-4.0 | Binary code, structured data |
+| 4.0-6.0 | Mixed content, partially structured |
+| 6.0-8.0 | Text, high-information payloads |
 
 ## JSON Output
 
@@ -236,60 +230,41 @@ Use `--json` for machine-parseable output:
 hashendra -j "5d41402abc4b2a76b9719d911017c592"
 ```
 
-The JSON schema:
+The JSON output is flat: input measurements at the top level and a
+ranked `results` array. Confidence is a 0-1 float. The top match is
+shown here; further candidates follow in the same array.
 
 ```json
 {
+  "charset": "Hex",
+  "context": "Generic",
+  "entropy": 3.4803377974034158,
   "input": "5d41402abc4b2a76b9719d911017c592",
-  "detection": {
-    "best_match": "MD5",
-    "confidence": 95.0,
-    "security": "Broken",
-    "matches": [
-      {
-        "name": "MD5",
-        "confidence": 95.0,
-        "hashcat_mode": 0,
-        "john_format": "raw-md5"
-      }
-    ]
-  },
-  "analysis": {
-    "length": 32,
-    "entropy": 3.5444,
-    "charset": "Hex"
-  }
+  "results": [
+    {
+      "common_name": "md5",
+      "compliance_refs": ["PCI DSS 4.0", "NIST SP 800-131A"],
+      "confidence": 0.7199999690055847,
+      "description": "Message-Digest Algorithm 5",
+      "hashcat_mode": 0,
+      "john_format": "raw-md5",
+      "name": "MD5",
+      "security_rating": "Broken"
+    }
+  ]
 }
 ```
 
 ## Interactive Workshop
 
-The workshop provides a REPL for interactive analysis:
+The workshop is a REPL for interactive analysis. It keeps a working
+buffer and applies the same detection, decoding, and cipher operations
+as the CLI flags, one step at a time. It suits iterative work where
+retyping full commands is slow. Run it with:
 
 ```bash
 hashendra workshop
-
-  ╔══════════════════════════════════════════════╗
-  ║        HashEndra Interactive Workshop        ║
-  ║     Type 'help' for available commands       ║
-  ╚══════════════════════════════════════════════╝
-
-hashendra> scan d2Vi
-[INPUT]        : d2Vi
-[LENGTH]       : 4 characters
-[ENTROPY]      : 2.0000 bits/char
-[CHARSET]      : Base64
-[CONFIDENCE]   : [##########] 100%
-→ Detected as Base64
-
-hashendra> decode d2Vi
-→ Decoded: "web"
-
-hashendra> hash sha256 hello
-→ SHA-256: 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-
-hashendra> rot "Uryyb Jbeyq"
-→ Best match: ROT-13 → "Hello World"
-
-hashendra> exit
 ```
+
+Type `/help` inside for the command list. The full table is also in
+the CLI reference under Interactive Workshop.

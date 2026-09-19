@@ -1,29 +1,28 @@
 # Cipher Usage Guide
 
 Every cipher supports `--encrypt` and `--decrypt` with a key. Keys are
-strings unless noted. All commands below were run against the binary —
-outputs are real.
+strings unless noted.
 
 Key formats:
 
 | Cipher | `--key` | `--cipher-param` |
 |---|---|---|
-| caesar, rot | shift number (default 3) | — |
-| atbash | none needed | — |
-| vigenere, beaufort, autokey, porta | keyword | — |
-| gronsfeld | digits, e.g. `2015` | — |
-| affine | `a,b`, e.g. `5,8` | — |
+| caesar, rot | shift number (default 3) | none |
+| atbash | none needed | none |
+| vigenere, beaufort, autokey, porta | keyword | none |
+| gronsfeld | digits, e.g. `2015` | none |
+| affine | `a,b`, e.g. `5,8` | none |
 | rail-fence | rails (default 3) | rails (alternative) |
-| columnar | keyword | — |
-| polybius | square keyword (default: standard square) | — |
-| tap | none needed | — |
+| columnar | keyword | none |
+| polybius | square keyword (default: standard square) | none |
+| tap | none needed | none |
 | adfgx, adfgvx | square keyword | column keyword |
-| four-square, two-square | `K1,K2` | — |
+| four-square, two-square | `K1,K2` | none |
 | trifid, bifid | square keyword | period (default 5) |
-| playfair | keyword | — |
-| bacon | 2-char alphabet (default `AB`) | — |
-| substitution | 26-letter cipher alphabet | — |
-| xor | string key | — (encrypt emits hex, decrypt accepts hex or raw) |
+| playfair | keyword | none |
+| bacon | 2-char alphabet (default `AB`) | none |
+| substitution | 26-letter cipher alphabet | none |
+| xor | string key | none (encrypt emits hex, decrypt accepts hex or raw) |
 
 ## Examples
 
@@ -47,7 +46,7 @@ hashendra --encrypt trifid --key SECRET --cipher-param 5 "HELLO WORLD."
 # Grids and codes
 hashendra --encrypt playfair --key PLAYFAIREXAMPLE "HIDETHEGOLDINTHETRES"
 hashendra --decrypt bifid --key SECRET --cipher-param 5 "<ciphertext>"
-hashendra --encrypt bacon --key AB "HI"                  # -> AAAAAAAAAB
+hashendra --encrypt bacon --key AB "HI"                  # -> AABBBABAAA
 hashendra --encrypt substitution --key "QWERTYUIOPASDFGHJKLZXCVBNM" "HELLO"
 ```
 
@@ -79,5 +78,6 @@ hashendra --hash hmac-sha256 --key "Jefe" "what do ya want for nothing?"
 ```
 
 RSA is the textbook primitive (raw modular exponentiation, e=65537
-keygen with Miller-Rabin) for CTF math — not padded PKCS#1, not a TLS
-stack. ECB is offered for compatibility; it leaks block patterns.
+keygen with Miller-Rabin) for CTF work. It is not padded PKCS#1 and
+not a TLS stack. ECB is offered for compatibility; it leaks block
+patterns.

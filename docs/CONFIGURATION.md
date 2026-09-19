@@ -4,8 +4,8 @@
 
 HashEndra supports two kinds of user configuration:
 
-1. **Custom Detection Signatures** — Add your own hash, encoding, or cipher patterns
-2. **Custom Carve Profiles** — Define new file types for carving
+1. **Custom Detection Signatures**: add hash, encoding, or cipher patterns of your own
+2. **Custom Carve Profiles**: define new file types for carving
 
 ## Custom Detection Signatures
 
@@ -42,7 +42,7 @@ This file is a JSON array of `Signature` objects. If the file doesn't exist, no 
 | `description` | Yes | string | Shown alongside the name |
 | `pattern` | Yes | string | Rust regex. Must compile! |
 | `detection_type` | Yes | `"Hash"` / `"Encoding"` / `"Cipher"` / `"Stego"` / `"Key"` | Category (`Key` matches raw input, like `Stego`) |
-| `confidence_weight` | Yes | float (0.0–1.0) | Base confidence multiplier |
+| `confidence_weight` | Yes | float (0.0-1.0) | Base confidence multiplier |
 | `common_name` | No | string | CLI shorthand (not used yet) |
 | `hashcat_mode` | No | int | Shown in detection results for crack suggestions |
 | `john_format` | No | string | Shown in detection results |
@@ -147,7 +147,7 @@ hashendra --list-hashes
 hashendra "MYAPP_HASH_VALUE"
 ```
 
-Look for the `WARN` messages at startup — if the JSON is malformed, HashEndra prints a warning with details.
+Startup prints a `WARN` message with details when the JSON is malformed.
 
 ## Custom Carve Profiles
 
@@ -164,7 +164,7 @@ Fields are space-separated:
 | Field | Description |
 |---|---|
 | `extension` | File extension for output (e.g., `jpg`, `pdf`) |
-| `needs_footer` | `y` or `n` — whether a footer is required |
+| `needs_footer` | `y` or `n`, depending on whether a footer is required |
 | `max_size` | Max carve size in bytes. `0` = no limit |
 | `header_pattern` | Hex bytes for header, `?` for wildcard (e.g., `FFD8FF` for JPEG) |
 | `footer_pattern` | Hex bytes for footer, `-` if none |

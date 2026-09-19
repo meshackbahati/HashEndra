@@ -78,19 +78,19 @@ Each signature specifies a regex pattern and a confidence weight:
 
 ### 2. Scoring
 
-Raw confidence = match * `confidence_weight`. Then `score_detection()` adjusts based on:
+Raw confidence equals the match multiplied by `confidence_weight`. Then `score_detection()` adjusts it for:
 
-- **Entropy analysis** — Does the entropy match expected values?
-- **Charset validation** — Is the charset consistent?
-- **Semantic validation** — Can Base64 decode? Is the JSON valid inside JWT?
-- **Repeated character penalty** — Sequences of "A", "0", etc. reduce score
-- **Context weighting** — Some signatures score higher in specific contexts
+- **Entropy analysis**: whether the entropy matches expected values
+- **Charset validation**: whether the charset is consistent
+- **Semantic validation**: whether Base64 decodes, whether JSON inside JWT is valid
+- **Repeated character penalty**: runs of "A", "0", and similar lower the score
+- **Context weighting**: some signatures score higher in specific contexts
 
 ### 3. Ambiguity Penalties
 
-- **Hash ambiguity** — 32-char hex could be MD5, NTLM, or MD4. All get multiplied by `0.80` (generic context)
-- **Encoding ambiguity** — Base64 vs Base64 URL vs JWT vs Base85 all get `0.90` multiplier when co-detected
-- **Hex encoding** — Capped at 35% confidence to avoid false positives
+- **Hash ambiguity**: 32-char hex could be MD5, NTLM, or MD4. All are multiplied by `0.80` in the generic context
+- **Encoding ambiguity**: Base64, Base64 URL, JWT, and Base85 share a `0.90` multiplier when co-detected
+- **Hex encoding**: capped at 35% confidence to avoid false positives
 
 ### 4. Security Ratings
 
@@ -222,7 +222,7 @@ Example `~/.hashendra/signatures.json`:
 | `description` | string | Brief description |
 | `pattern` | string | Regex pattern (must compile) |
 | `detection_type` | "Hash" / "Encoding" / "Cipher" / "Stego" | Detection category |
-| `confidence_weight` | float 0.0–1.0 | Base confidence multiplier |
+| `confidence_weight` | float 0.0-1.0 | Base confidence multiplier |
 | `common_name` | string (optional) | CLI shorthand name |
 | `hashcat_mode` | int (optional) | Hashcat mode number |
 | `john_format` | string (optional) | John the Ripper format |
@@ -232,7 +232,7 @@ Example `~/.hashendra/signatures.json`:
 
 ### Loading Custom Signatures
 
-Custom signatures are loaded automatically from `~/.hashendra/signatures.json`. The signatures merge with built-in ones — you can even override built-in detection by using the same name.
+Custom signatures load automatically from `~/.hashendra/signatures.json` and merge with the built-in set. Using the same name as a built-in signature overrides it.
 
 To verify your custom signatures are loaded:
 

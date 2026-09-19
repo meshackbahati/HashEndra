@@ -90,13 +90,13 @@ hashendra forensic disk --fs fat --include-directories disk.dd
 
 ### NTFS Recovery
 
-NTFS recovery supports:
+NTFS recovery covers:
 
-- **Resident data** — Small files stored directly in the MFT record
-- **Non-resident data** — Files spanning multiple clusters, recovered via data run parsing
-- **Deleted entries** — MFT records marked as inactive but data still present
-- **Alternate data streams** — ADS content recovery
-- **Directory reconstruction** — File names and paths from $INDEX_ROOT/$INDEX_ALLOCATION
+- **Resident data**: small files stored directly in the MFT record
+- **Non-resident data**: files spanning multiple clusters, recovered through data run parsing
+- **Deleted entries**: MFT records marked inactive whose data is still present
+- **Alternate data streams**: ADS content recovery
+- **Directory reconstruction**: file names and paths from $INDEX_ROOT and $INDEX_ALLOCATION
 
 ## File Carving
 

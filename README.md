@@ -91,14 +91,10 @@ otherwise it clones the repo and builds from source (needs Rust).
 Flags: `--version 2.0.0` (pin a release), `--prefix DIR`,
 `--from-source` (always build), `--keep`, `--uninstall`.
 
-### Manual
+### From source
 
-```bash
-git clone https://github.com/meshackbahati/HashEndra.git
-cd HashEndra
-cargo build --release
-sudo cp target/release/hashendra /usr/local/bin/
-```
+Contributors build from a checkout instead. See
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the procedure.
 
 ### Verify
 

@@ -6,9 +6,9 @@ pub(crate) fn print_encryption_ciphers() {
     safe_println!("{}", "Supported ciphers (encrypt + decrypt):".blue().bold());
     for cipher in &[
         "caesar", "atbash", "vigenere", "beaufort", "autokey", "gronsfeld", "porta",
-        "rail-fence", "columnar", "polybius", "tap", "adfgx", "adfgvx",
+        "affine", "rail-fence", "columnar", "polybius", "tap", "adfgx", "adfgvx",
         "four-square", "two-square", "trifid", "playfair", "bifid",
-        "bacon", "substitution", "xor", "aes-cbc", "aes-ecb", "rsa", "rsa-keygen",
+        "bacon", "substitution", "xor", "aes-cbc", "aes-ecb", "aes-gcm", "rsa", "rsa-keygen",
     ] {
         safe_println!("  - {}", cipher);
     }

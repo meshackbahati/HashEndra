@@ -4,19 +4,20 @@ Welcome to the HashEndra documentation hub.
 
 ## Getting Started
 
-- [CLI Reference](CLI.md) — Complete command-line reference with examples
-- [User Guide](USER_GUIDE.md) — Step-by-step usage guide
+- [CLI Reference](CLI.md): command-line reference with examples
+- [User Guide](USER_GUIDE.md): step-by-step usage guide
+- [Wiki](WIKI.md) - What it is, what it does, worked examples
 
 ## Core Concepts
 
-- [Architecture](ARCHITECTURE.md) — System architecture with Mermaid diagrams
-- [Detection System](DETECTORS.md) — How detection signatures work
-- [Forensics Module](FORENSICS.md) — Disk analysis, carving, metadata, strings
+- [Architecture](ARCHITECTURE.md): system architecture with Mermaid diagrams
+- [Detection System](DETECTORS.md): how detection signatures work
+- [Forensics Module](FORENSICS.md): disk analysis, carving, metadata, strings
 
 ## Configuration
 
-- [Configuration & Custom Algorithms](CONFIGURATION.md) — Custom signatures, carve profiles
-- [Development Guide](DEVELOPMENT.md) — Building, testing, extending HashEndra
+- [Configuration & Custom Algorithms](CONFIGURATION.md): custom signatures, carve profiles
+- [Development Guide](DEVELOPMENT.md): building, testing, extending HashEndra
 
 ## Quick Links
 
