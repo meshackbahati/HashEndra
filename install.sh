@@ -105,8 +105,14 @@ if [[ -z "$VERSION" ]]; then
     fi
     VERSION="$(grep -m1 '"tag_name"' "$RELEASE_JSON" 2>/dev/null | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')" || true
     rm -f "$RELEASE_JSON"
+    if [[ -z "$VERSION" ]] && have curl; then
+        REDIR="$(curl -fsSL -o /dev/null -w '%{redirect_url}' "https://github.com/${REPO}/releases/latest" 2>/dev/null || true)"
+        case "$(basename "$REDIR")" in
+            v*) VERSION="${REDIR##*/v}" ;;
+        esac
+    fi
     if [[ -z "$VERSION" ]]; then
-        log "[!] Could not determine latest release (need curl or wget). Falling back to source build."
+        log "[!] Could not determine latest release. Falling back to source build."
         FROM_SOURCE=true
     else
         log "[*] Latest release: v${VERSION}"
