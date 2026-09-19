@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-#
-# HashEndra installer — fetches a prebuilt release binary when one exists
-# for your OS, otherwise builds from source.
+# HashEndra installer: prebuilt binary when available, source build otherwise.
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/meshackbahati/HashEndra/main/install.sh | bash
 #   bash install.sh [--version 2.0.0] [--prefix /usr/local] [--keep] [--from-source] [--uninstall]
 #
-# Options:
-#   --version VER   Install a specific release (default: latest)
-#   --prefix DIR    Install binary to DIR/bin (default: /usr/local, ~/.local fallback)
-#   --keep          Keep downloaded/cloned files after installation
-#   --from-source   Skip prebuilt binaries; clone and cargo build instead
-#   --uninstall     Remove HashEndra binary and exit
+#   --version VER   Pin a release (default: latest)
+#   --prefix DIR    Install to DIR/bin (default: /usr/local, ~/.local fallback)
+#   --keep          Keep downloaded files
+#   --from-source   Always build from source
+#   --uninstall     Remove the binary and exit
 #
 set -eo pipefail
 
@@ -30,7 +27,7 @@ while [[ $# -gt 0 ]]; do
         --keep) KEEP_FILES=true; shift ;;
         --from-source) FROM_SOURCE=true; shift ;;
         --uninstall) DO_UNINSTALL=true; shift ;;
-        -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]:-$0}"; exit 0 ;;
+        -h|--help) sed -n '2,14p' "${BASH_SOURCE[0]:-$0}"; exit 0 ;;
         *) echo "Unknown option: $1 (try --help)"; exit 1 ;;
     esac
 done
@@ -38,7 +35,6 @@ done
 log()  { printf '%s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# ----- Uninstall -----------------------------------------------------------
 if $DO_UNINSTALL; then
     for dir in /usr/local/bin "$HOME/.local/bin" "$HOME/bin" "$HOME/.cargo/bin"; do
         for bin in "$dir/hashendra" "$dir/hashendra.exe"; do
@@ -52,15 +48,18 @@ if $DO_UNINSTALL; then
     exit 0
 fi
 
-cat << "EOF"
-  ___ ___  __  __  __ _  _ __   __ _  __ _  ___   ___
- / _ \ _ \/  \|  \|  \| |/ _ \ / _| |/ _| |/ _ \ / _ \
-| (_)  __/ () | |) | |) | (_) | (_| | (_| | (_) | (_) |
- \___\___|\__/|___/|___/ \___/ \__,_|\__,_|\___/ \___/
-          identify hashes - decode strings - carve files
-EOF
+if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
+    C_CYAN=$'\033[1;36m'; C_GREEN=$'\033[1;32m'; C_YELLOW=$'\033[1;33m'; C_RESET=$'\033[0m'
+else
+    C_CYAN=''; C_GREEN=''; C_YELLOW=''; C_RESET=''
+fi
+printf '%b\n' "${C_CYAN}  ___ ___  __  __  __ _  _ __   __ _  __ _  ___   ___${C_RESET}"
+printf '%b\n' "${C_CYAN} / _ \ _ \/  \|  \|  \| |/ _ \ / _| |/ _| |/ _ \ / _ \\\\${C_RESET}"
+printf '%b\n' "${C_CYAN}| (_)  __/ () | |) | |) | (_) | (_| | (_| | (_) | (_) |${C_RESET}"
+printf '%b\n' "${C_CYAN} \___\___|\__/|___/|___/ \___/ \__,_|\__,_|\___/ \___/${C_RESET}"
+printf '%b\n' "${C_YELLOW}  H A S H E N D R A${C_RESET}"
+printf '%b\n' "${C_GREEN}          identify hashes - decode strings - carve files${C_RESET}"
 
-# ----- Detect platform -----------------------------------------------------
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 log "[*] Detected: $OS $ARCH"
@@ -90,23 +89,22 @@ esac
 
 ASSET=""
 if [[ -n "$TRIPLE_OS" && -n "$TRIPLE_ARCH" ]]; then
-    # If an older release lacks this asset the download 404s and we fall
-    # back to a source build automatically.
     ASSET="hashendra-${TRIPLE_ARCH}-${TRIPLE_OS}.${EXT}"
 fi
-# Windows binary name inside the archive.
 BIN_NAME="hashendra"
 [[ "$EXT" == "zip" ]] && BIN_NAME="hashendra.exe"
 
-# ----- Resolve version -----------------------------------------------------
+# Release JSON goes to a file first: piping curl into `grep -m1`
+# closes the pipe early and curl dies with error 23.
 if [[ -z "$VERSION" ]]; then
+    RELEASE_JSON="$(mktemp)"
     if have curl; then
-        VERSION="$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" \
-            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')"
+        curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" -o "$RELEASE_JSON" 2>/dev/null || true
     elif have wget; then
-        VERSION="$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" \
-            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')"
+        wget -qO "$RELEASE_JSON" "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true
     fi
+    VERSION="$(grep -m1 '"tag_name"' "$RELEASE_JSON" 2>/dev/null | sed -E 's/.*"tag_name":[[:space:]]*"v?([^"]+)".*/\1/')" || true
+    rm -f "$RELEASE_JSON"
     if [[ -z "$VERSION" ]]; then
         log "[!] Could not determine latest release (need curl or wget). Falling back to source build."
         FROM_SOURCE=true
@@ -114,12 +112,10 @@ if [[ -z "$VERSION" ]]; then
         log "[*] Latest release: v${VERSION}"
     fi
 else
-    # Accept "2.0.0" or "v2.0.0".
     VERSION="${VERSION#v}"
     log "[*] Requested release: v${VERSION}"
 fi
 
-# ----- Install locations ---------------------------------------------------
 case "$OS" in
     Linux|Darwin) DEFAULT_PREFIX="/usr/local" ;;
     *)            DEFAULT_PREFIX="$HOME/.local" ;;
@@ -133,7 +129,6 @@ mkdir -p "$INSTALL_DIR" 2>/dev/null || {
 }
 
 install_binary() {
-    # $1 = file to install
     local src="$1" dest="$INSTALL_DIR/hashendra"
     [[ "$EXT" == "zip" ]] && dest="$INSTALL_DIR/hashendra.exe"
     cp "$src" "$dest"
@@ -159,9 +154,7 @@ advise_path() {
     log "    export PATH=\"\$PATH:$INSTALL_DIR\""
 }
 
-# ----- Try prebuilt binary -------------------------------------------------
 download_asset() {
-    # $1 = url, $2 = output file. Returns 0 on success.
     if have curl; then
         curl -fSL --retry 2 -o "$2" "$1"
     elif have wget; then
@@ -214,7 +207,6 @@ if ! $FROM_SOURCE && [[ -n "$ASSET" && -n "$VERSION" ]]; then
     fi
 fi
 
-# ----- Fallback: build from source -----------------------------------------
 if ! $INSTALLED; then
     if ! $FROM_SOURCE; then
         log "[*] Building from source instead."
@@ -247,7 +239,6 @@ if ! $INSTALLED; then
     INSTALLED=true
 fi
 
-# ----- Finish ---------------------------------------------------------------
 if $INSTALLED; then
     verify_binary
     advise_path
