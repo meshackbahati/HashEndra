@@ -128,11 +128,13 @@ case "$OS" in
 esac
 INSTALL_PREFIX="${INSTALL_PREFIX:-$DEFAULT_PREFIX}"
 INSTALL_DIR="$INSTALL_PREFIX/bin"
-mkdir -p "$INSTALL_DIR" 2>/dev/null || {
+mkdir -p "$INSTALL_DIR" 2>/dev/null || true
+if [[ ! -w "$INSTALL_DIR" ]]; then
     INSTALL_DIR="$HOME/.local/bin"
     mkdir -p "$INSTALL_DIR"
-    log "[!] Cannot write to $INSTALL_PREFIX/bin, using $INSTALL_DIR"
-}
+    log "[!] $INSTALL_PREFIX/bin is not writable, using $INSTALL_DIR"
+    log "    To choose another location: install.sh --prefix DIR"
+fi
 
 install_binary() {
     local src="$1" dest="$INSTALL_DIR/hashendra"
